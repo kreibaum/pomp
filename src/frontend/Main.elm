@@ -13,12 +13,13 @@ main =
         { view = view
         , encodeRemoteEvent = encodeRemoteEvent
         , decodeServer = decodeLiveState
-        , dummyServer = { count = 0 }
+        , dummyServer = { count = 0, privateCount = 0 }
         }
 
 
 type alias LiveState =
     { count : Int
+    , privateCount : Int
     }
 
 
@@ -39,8 +40,9 @@ encodeRemoteEvent e =
 
 decodeLiveState : Json.Decode.Decoder LiveState
 decodeLiveState =
-    Json.Decode.at [ "data", "count" ] Json.Decode.int
-        |> Json.Decode.map LiveState
+    Json.Decode.map2 LiveState
+        (Json.Decode.at [ "data", "count" ] Json.Decode.int)
+        (Json.Decode.at [ "data", "private_count" ] Json.Decode.int)
 
 
 view : LiveState -> Html RemoteEvent
@@ -48,5 +50,7 @@ view model =
     div []
         [ button [ onClick Decrement ] [ text "-" ]
         , div [] [ text (String.fromInt model.count) ]
+        , div [] [ text "," ]
+        , div [] [ text (String.fromInt model.privateCount) ]
         , button [ onClick Increment ] [ text "+" ]
         ]

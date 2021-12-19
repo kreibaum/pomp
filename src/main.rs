@@ -1,3 +1,5 @@
+mod game;
+
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -5,6 +7,8 @@ use actix::prelude::*;
 use actix::{Actor, Handler, Message, StreamHandler, Supervised, SystemService};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
+
+use game::PlayerUuid;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -19,13 +23,13 @@ struct LiveState {
 
 #[derive(Debug, Default)]
 struct GameState {
-    players: HashSet<String>,
+    players: HashSet<PlayerUuid>,
     count: i32,
-    player_private_count: HashMap<String, i32>,
+    player_private_count: HashMap<PlayerUuid, i32>,
 }
 
 impl GameState {
-    fn restrict(&self, player: &str) -> LiveState {
+    fn restrict(&self, player: &PlayerUuid) -> LiveState {
         LiveState {
             count: self.count,
             private_count: self.player_private_count.get(player).unwrap_or(&0).clone(),
@@ -35,7 +39,7 @@ impl GameState {
 
 struct RemoteEventWrapper {
     event: RemoteEvent,
-    sender: String,
+    sender: PlayerUuid,
 }
 
 impl Message for RemoteEventWrapper {
@@ -51,7 +55,7 @@ enum RemoteEvent {
 #[derive(Debug)]
 struct LiveActor {
     hb: Instant,
-    uuid: String,
+    uuid: PlayerUuid,
 }
 
 impl Actor for LiveActor {
@@ -132,27 +136,16 @@ impl Handler<UpdateLiveState> for LiveActor {
 }
 
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    use lazy_static::lazy_static;
-    use regex::Regex;
-    lazy_static! {
-        static ref RE: Regex = Regex::new(
-            "UUID=([0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12})"
-        )
-        .unwrap();
-    }
-    if let Some(cap) = RE.captures_iter(&req.query_string().to_uppercase()).next() {
-        if let Some(uuid) = cap.get(1) {
-            let uuid = uuid.as_str().to_owned();
-            let resp = ws::start(
-                LiveActor {
-                    hb: Instant::now(),
-                    uuid,
-                },
-                &req,
-                stream,
-            );
-            return resp;
-        }
+    if let Some(uuid) = PlayerUuid::from_query_string(req.query_string()) {
+        let resp = ws::start(
+            LiveActor {
+                hb: Instant::now(),
+                uuid,
+            },
+            &req,
+            stream,
+        );
+        return resp;
     }
     // Return 401 Unauthorized if we can't find a UUID
     Err(actix_web::error::ErrorUnauthorized(
@@ -166,7 +159,7 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
 #[derive(Debug, Default)]
 struct GameActor {
     state: GameState,
-    subs: HashMap<Addr<LiveActor>, String>,
+    subs: HashMap<Addr<LiveActor>, PlayerUuid>,
 }
 
 impl Actor for GameActor {
@@ -189,7 +182,7 @@ impl Handler<RemoteEventWrapper> for GameActor {
                 // Increase private count of the player that sent the event
                 self.state
                     .player_private_count
-                    .entry(e.sender.clone())
+                    .entry(e.sender)
                     .and_modify(|v| *v += 1)
                     .or_insert(1);
             }
@@ -198,7 +191,7 @@ impl Handler<RemoteEventWrapper> for GameActor {
                 // Decrease private count of the player that sent the event
                 self.state
                     .player_private_count
-                    .entry(e.sender.clone())
+                    .entry(e.sender)
                     .and_modify(|v| *v -= 1)
                     .or_insert(-1);
             }
@@ -209,7 +202,7 @@ impl Handler<RemoteEventWrapper> for GameActor {
     }
 }
 
-struct Subscribe(Addr<LiveActor>, String);
+struct Subscribe(Addr<LiveActor>, PlayerUuid);
 
 impl Message for Subscribe {
     type Result = ();

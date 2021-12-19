@@ -11,5 +11,6 @@ with tailwind-css.
 
 This still needs improvement.
 
+    swc static/main.ts -o target/main.js
     elm-live src/frontend/Main.elm --start-page=static/index.html --hot -- --output=target/elm.js
     cargo watch -x 'run --bin pomp'

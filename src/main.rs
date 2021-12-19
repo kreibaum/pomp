@@ -2,6 +2,11 @@ use actix::{Actor, StreamHandler};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
+#[derive(Debug)]
+struct LiveState {
+    count: i32,
+}
+
 /// Define HTTP actor
 struct MyWs;
 

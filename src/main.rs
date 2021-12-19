@@ -15,12 +15,14 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Shared state for one player
 #[derive(Debug, Default, Clone)]
 struct LiveState {
     count: i32,
     private_count: i32,
 }
 
+/// Total state of the whole game.
 #[derive(Debug, Default)]
 struct GameState {
     players: HashSet<PlayerUuid>,
@@ -29,6 +31,7 @@ struct GameState {
 }
 
 impl GameState {
+    /// Extract information that is relevant for one player and hide the rest.
     fn restrict(&self, player: &PlayerUuid) -> LiveState {
         LiveState {
             count: self.count,
@@ -37,6 +40,7 @@ impl GameState {
     }
 }
 
+/// Remote Events need to track who send them so the game can process them properly.
 struct RemoteEventWrapper {
     event: RemoteEvent,
     sender: PlayerUuid,
@@ -46,12 +50,13 @@ impl Message for RemoteEventWrapper {
     type Result = ();
 }
 
+/// RemoteEvent custom type. This depents on the business logic we have.
 enum RemoteEvent {
     Increment,
     Decrement,
 }
 
-/// Define HTTP actor
+/// The LiveActor is the actor that handles the websocket connection & the LiveState.
 #[derive(Debug)]
 struct LiveActor {
     hb: Instant,
@@ -73,7 +78,7 @@ impl Actor for LiveActor {
     }
 }
 
-/// Handler for ws::Message message
+/// Delegate raw websocket messages to better places.
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for LiveActor {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
@@ -118,6 +123,7 @@ impl LiveActor {
     }
 }
 
+/// The GameActor tells the LiveActor about the game state.
 struct UpdateLiveState(LiveState);
 
 impl Message for UpdateLiveState {
@@ -135,6 +141,7 @@ impl Handler<UpdateLiveState> for LiveActor {
     }
 }
 
+/// Sets up a websocket connection ensuring there is a uuid.
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     if let Some(uuid) = PlayerUuid::from_query_string(req.query_string()) {
         let resp = ws::start(
@@ -153,9 +160,7 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
     ))
 }
 
-// Actor that holds the shared state //
-///////////////////////////////////////
-
+/// Actor that holds the shared state
 #[derive(Debug, Default)]
 struct GameActor {
     state: GameState,
@@ -168,6 +173,8 @@ impl Actor for GameActor {
 
 impl Supervised for GameActor {}
 
+// TODO: There should be a broker service and then multiple games which each
+// have their own game actor.
 impl SystemService for GameActor {}
 
 /// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
@@ -202,6 +209,7 @@ impl Handler<RemoteEventWrapper> for GameActor {
     }
 }
 
+/// A LiveActor subscribes to the GameActor to get updates.
 struct Subscribe(Addr<LiveActor>, PlayerUuid);
 
 impl Message for Subscribe {
@@ -220,6 +228,7 @@ impl Handler<Subscribe> for GameActor {
     }
 }
 
+/// When a LiveActor disconnects, it unsubscribes from the GameActor.
 struct Unsubscribe(Addr<LiveActor>);
 
 impl Message for Unsubscribe {

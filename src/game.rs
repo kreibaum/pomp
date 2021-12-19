@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+/** Identifier for players, this way we can play without accounts. */
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct PlayerUuid(String);
 
@@ -10,6 +11,7 @@ impl Display for PlayerUuid {
 }
 
 impl PlayerUuid {
+    /** Login happens via /ws?uuid=... this parses the "uuid=..." part for you. */
     pub fn from_query_string(query_string: &str) -> Option<Self> {
         use lazy_static::lazy_static;
         use regex::Regex;

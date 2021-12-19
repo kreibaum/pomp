@@ -33,11 +33,13 @@ impl GameState {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
 struct RemoteEventWrapper {
     event: RemoteEvent,
     sender: String,
+}
+
+impl Message for RemoteEventWrapper {
+    type Result = ();
 }
 
 enum RemoteEvent {
@@ -112,9 +114,11 @@ impl LiveActor {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
 struct UpdateLiveState(LiveState);
+
+impl Message for UpdateLiveState {
+    type Result = ();
+}
 
 impl Handler<UpdateLiveState> for LiveActor {
     type Result = ();
@@ -165,15 +169,6 @@ struct GameActor {
     subs: HashMap<Addr<LiveActor>, String>,
 }
 
-// impl Default for GameActor {
-//     fn default() -> Self {
-//         GameActor {
-//             state: GameState::default(),
-//             subs: HashMap::new(),
-//         }
-//     }
-// }
-
 impl Actor for GameActor {
     type Context = actix::Context<Self>;
 }
@@ -214,9 +209,11 @@ impl Handler<RemoteEventWrapper> for GameActor {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
 struct Subscribe(Addr<LiveActor>, String);
+
+impl Message for Subscribe {
+    type Result = ();
+}
 
 impl Handler<Subscribe> for GameActor {
     type Result = ();
@@ -230,9 +227,11 @@ impl Handler<Subscribe> for GameActor {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
 struct Unsubscribe(Addr<LiveActor>);
+
+impl Message for Unsubscribe {
+    type Result = ();
+}
 
 impl Handler<Unsubscribe> for GameActor {
     type Result = ();

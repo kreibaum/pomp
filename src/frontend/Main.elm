@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser
 import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
+import Json.Decode
 import Json.Encode exposing (Value)
 import Websocket
 
@@ -18,17 +19,43 @@ main =
 
 
 type alias Model =
-    { count : Int }
+    { server : LiveState }
+
+
+type alias LiveState =
+    { count : Int
+    }
+
+
+type RemoveEvent
+    = Increment
+    | Decrement
+
+
+send : RemoveEvent -> Cmd mgs
+send e =
+    case e of
+        Increment ->
+            Websocket.send (Json.Encode.string "Increment")
+
+        Decrement ->
+            Websocket.send (Json.Encode.string "Decrement")
+
+
+decodeLiveState : Json.Decode.Decoder LiveState
+decodeLiveState =
+    Json.Decode.at [ "data", "count" ] Json.Decode.int
+        |> Json.Decode.map LiveState
 
 
 init : flags -> ( Model, Cmd Msg )
 init _ =
-    ( { count = 0 }, Cmd.none )
+    -- TODO: Inject the initial server state via flags.
+    ( { server = { count = 0 } }, Cmd.none )
 
 
 type Msg
-    = Increment
-    | Decrement
+    = JustSend RemoveEvent
     | Ping
     | Pong Value
 
@@ -36,30 +63,31 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Increment ->
-            ( { model | count = model.count + 1 }, Cmd.none )
-
-        Decrement ->
-            ( { model | count = model.count - 1 }, Cmd.none )
+        JustSend event ->
+            ( model, send event )
 
         Ping ->
-            ( model, Websocket.websocketOut (Json.Encode.string "Hello, World.") )
+            ( model, Websocket.send (Json.Encode.string "Hello, World.") )
 
         Pong value ->
-            Debug.log "Pong" value
-                |> (\_ -> ( model, Cmd.none ))
+            Json.Decode.decodeValue decodeLiveState value
+                -- TODO: Error handling when the server state can't be parsed.
+                |> Result.withDefault { count = -666 }
+                |> (\liveState ->
+                        ( { model | server = liveState }, Cmd.none )
+                   )
 
 
 view : Model -> Html Msg
 view model =
     div []
-        [ button [ onClick Decrement ] [ text "-" ]
-        , div [] [ text (String.fromInt model.count) ]
-        , button [ onClick Increment ] [ text "+" ]
+        [ button [ onClick (JustSend Decrement) ] [ text "-" ]
+        , div [] [ text (String.fromInt model.server.count) ]
+        , button [ onClick (JustSend Increment) ] [ text "+" ]
         , button [ onClick Ping ] [ text "Ping" ]
         ]
 
 
 subscriptions : model -> Sub Msg
 subscriptions _ =
-    Websocket.websocketIn Pong
+    Websocket.subscribe Pong

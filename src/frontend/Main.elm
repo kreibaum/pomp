@@ -5,21 +5,17 @@ import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
 import Json.Decode
 import Json.Encode exposing (Value)
-import Websocket
+import LiveProgram exposing (LiveProgram)
 
 
-main : Program () Model Msg
+main : LiveProgram LiveState RemoteEvent
 main =
-    Browser.element
-        { init = init
-        , update = update
-        , view = view
-        , subscriptions = subscriptions
+    LiveProgram.static
+        { view = view
+        , encodeRemoteEvent = encodeRemoteEvent
+        , decodeServer = decodeLiveState
+        , dummyServer = { count = 0 }
         }
-
-
-type alias Model =
-    { server : LiveState }
 
 
 type alias LiveState =
@@ -27,19 +23,19 @@ type alias LiveState =
     }
 
 
-type RemoveEvent
+type RemoteEvent
     = Increment
     | Decrement
 
 
-send : RemoveEvent -> Cmd mgs
-send e =
+encodeRemoteEvent : RemoteEvent -> Value
+encodeRemoteEvent e =
     case e of
         Increment ->
-            Websocket.send (Json.Encode.string "Increment")
+            Json.Encode.string "Increment"
 
         Decrement ->
-            Websocket.send (Json.Encode.string "Decrement")
+            Json.Encode.string "Decrement"
 
 
 decodeLiveState : Json.Decode.Decoder LiveState
@@ -48,46 +44,10 @@ decodeLiveState =
         |> Json.Decode.map LiveState
 
 
-init : flags -> ( Model, Cmd Msg )
-init _ =
-    -- TODO: Inject the initial server state via flags.
-    ( { server = { count = 0 } }, Cmd.none )
-
-
-type Msg
-    = JustSend RemoveEvent
-    | Ping
-    | Pong Value
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        JustSend event ->
-            ( model, send event )
-
-        Ping ->
-            ( model, Websocket.send (Json.Encode.string "Hello, World.") )
-
-        Pong value ->
-            Json.Decode.decodeValue decodeLiveState value
-                -- TODO: Error handling when the server state can't be parsed.
-                |> Result.withDefault { count = -666 }
-                |> (\liveState ->
-                        ( { model | server = liveState }, Cmd.none )
-                   )
-
-
-view : Model -> Html Msg
+view : LiveState -> Html RemoteEvent
 view model =
     div []
-        [ button [ onClick (JustSend Decrement) ] [ text "-" ]
-        , div [] [ text (String.fromInt model.server.count) ]
-        , button [ onClick (JustSend Increment) ] [ text "+" ]
-        , button [ onClick Ping ] [ text "Ping" ]
+        [ button [ onClick Decrement ] [ text "-" ]
+        , div [] [ text (String.fromInt model.count) ]
+        , button [ onClick Increment ] [ text "+" ]
         ]
-
-
-subscriptions : model -> Sub Msg
-subscriptions _ =
-    Websocket.subscribe Pong

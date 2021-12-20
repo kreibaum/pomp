@@ -14,12 +14,15 @@ use game::PlayerUuid;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Game Loop runs at 5 fps
+const GAME_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Shared state for one player
 #[derive(Debug, Default, Clone)]
 struct LiveState {
     count: i32,
     private_count: i32,
+    time_elapsed: u64,
 }
 
 /// Total state of the whole game.
@@ -28,6 +31,7 @@ struct GameState {
     players: HashSet<PlayerUuid>,
     count: i32,
     player_private_count: HashMap<PlayerUuid, i32>,
+    time_elapsed: u64,
 }
 
 impl GameState {
@@ -36,6 +40,7 @@ impl GameState {
         LiveState {
             count: self.count,
             private_count: self.player_private_count.get(player).unwrap_or(&0).clone(),
+            time_elapsed: self.time_elapsed,
         }
     }
 }
@@ -135,8 +140,8 @@ impl Handler<UpdateLiveState> for LiveActor {
 
     fn handle(&mut self, msg: UpdateLiveState, ctx: &mut <LiveActor as Actor>::Context) {
         ctx.text(format!(
-            "{{\"count\": {}, \"private_count\":{} }}",
-            msg.0.count, msg.0.private_count
+            "{{\"count\": {}, \"private_count\":{}, \"time_elapsed\":{} }}",
+            msg.0.count, msg.0.private_count, msg.0.time_elapsed
         ));
     }
 }
@@ -169,6 +174,16 @@ struct GameActor {
 
 impl Actor for GameActor {
     type Context = actix::Context<Self>;
+
+    // Start game loop when actor starts
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_interval(GAME_LOOP_INTERVAL, |act, ctx| {
+            act.state.time_elapsed += 1;
+            for sub in act.subs.keys() {
+                sub.do_send(UpdateLiveState(act.state.restrict(&act.subs[sub])));
+            }
+        });
+    }
 }
 
 impl Supervised for GameActor {}

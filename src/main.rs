@@ -183,11 +183,11 @@ impl Handler<Subscribe> for GameActor {
     type Result = ();
 
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
-        msg.0.do_send(UpdateLiveState(self.state.restrict(&msg.1)));
         println!("New connection from {}", msg.1);
-        self.subs.insert(msg.0, msg.1.clone());
-        self.state.join_player(msg.1);
+        self.subs.insert(msg.0.clone(), msg.1.clone());
+        self.state.join_player(msg.1.clone());
         println!("Connected sockets: {}", self.subs.len());
+        msg.0.do_send(UpdateLiveState(self.state.restrict(&msg.1)));
     }
 }
 

@@ -101,8 +101,10 @@ impl GameState {
     /// TODO: This should be done in some pre-game setup phase.
     /// For now is is easy enought that we can just mix it in here.
     pub fn join_player(&mut self, player: PlayerUuid) {
-        self.players.insert(player.clone());
-        self.inventories.insert(player, PlayerInventory::default());
+        if !self.players.contains(&player) {
+            self.players.insert(player.clone());
+            self.inventories.insert(player, PlayerInventory::default());
+        }
     }
 }
 

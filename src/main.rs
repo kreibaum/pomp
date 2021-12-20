@@ -1,4 +1,5 @@
 mod game;
+mod pomp;
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -9,6 +10,7 @@ use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
 use game::PlayerUuid;
+use pomp::RemoteEvent;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -16,34 +18,6 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Game Loop runs at 5 fps
 const GAME_LOOP_INTERVAL: Duration = Duration::from_millis(200);
-
-/// Shared state for one player
-#[derive(Debug, Default, Clone)]
-struct LiveState {
-    count: i32,
-    private_count: i32,
-    time_elapsed: u64,
-}
-
-/// Total state of the whole game.
-#[derive(Debug, Default)]
-struct GameState {
-    players: HashSet<PlayerUuid>,
-    count: i32,
-    player_private_count: HashMap<PlayerUuid, i32>,
-    time_elapsed: u64,
-}
-
-impl GameState {
-    /// Extract information that is relevant for one player and hide the rest.
-    fn restrict(&self, player: &PlayerUuid) -> LiveState {
-        LiveState {
-            count: self.count,
-            private_count: self.player_private_count.get(player).unwrap_or(&0).clone(),
-            time_elapsed: self.time_elapsed,
-        }
-    }
-}
 
 /// Remote Events need to track who send them so the game can process them properly.
 struct RemoteEventWrapper {
@@ -53,12 +27,6 @@ struct RemoteEventWrapper {
 
 impl Message for RemoteEventWrapper {
     type Result = ();
-}
-
-/// RemoteEvent custom type. This depents on the business logic we have.
-enum RemoteEvent {
-    Increment,
-    Decrement,
 }
 
 /// The LiveActor is the actor that handles the websocket connection & the LiveState.
@@ -129,7 +97,7 @@ impl LiveActor {
 }
 
 /// The GameActor tells the LiveActor about the game state.
-struct UpdateLiveState(LiveState);
+struct UpdateLiveState(pomp::LiveState);
 
 impl Message for UpdateLiveState {
     type Result = ();
@@ -138,11 +106,8 @@ impl Message for UpdateLiveState {
 impl Handler<UpdateLiveState> for LiveActor {
     type Result = ();
 
-    fn handle(&mut self, msg: UpdateLiveState, ctx: &mut <LiveActor as Actor>::Context) {
-        ctx.text(format!(
-            "{{\"count\": {}, \"private_count\":{}, \"time_elapsed\":{} }}",
-            msg.0.count, msg.0.private_count, msg.0.time_elapsed
-        ));
+    fn handle(&mut self, msg: UpdateLiveState, ctx: &mut ws::WebsocketContext<LiveActor>) {
+        ctx.text(msg.0.to_string());
     }
 }
 
@@ -168,7 +133,7 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
 /// Actor that holds the shared state
 #[derive(Debug, Default)]
 struct GameActor {
-    state: GameState,
+    state: pomp::GameState,
     subs: HashMap<Addr<LiveActor>, PlayerUuid>,
 }
 
@@ -178,7 +143,7 @@ impl Actor for GameActor {
     // Start game loop when actor starts
     fn started(&mut self, ctx: &mut Self::Context) {
         ctx.run_interval(GAME_LOOP_INTERVAL, |act, ctx| {
-            act.state.time_elapsed += 1;
+            act.state.process_tick();
             for sub in act.subs.keys() {
                 sub.do_send(UpdateLiveState(act.state.restrict(&act.subs[sub])));
             }
@@ -198,26 +163,7 @@ impl Handler<RemoteEventWrapper> for GameActor {
     type Result = ();
 
     fn handle(&mut self, e: RemoteEventWrapper, _: &mut Self::Context) -> Self::Result {
-        match e.event {
-            RemoteEvent::Increment => {
-                self.state.count += 1;
-                // Increase private count of the player that sent the event
-                self.state
-                    .player_private_count
-                    .entry(e.sender)
-                    .and_modify(|v| *v += 1)
-                    .or_insert(1);
-            }
-            RemoteEvent::Decrement => {
-                self.state.count -= 1;
-                // Decrease private count of the player that sent the event
-                self.state
-                    .player_private_count
-                    .entry(e.sender)
-                    .and_modify(|v| *v -= 1)
-                    .or_insert(-1);
-            }
-        }
+        self.state.process_remote_event(e.event, e.sender);
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState(self.state.restrict(&sub.1)));
         }
@@ -238,7 +184,7 @@ impl Handler<Subscribe> for GameActor {
         msg.0.do_send(UpdateLiveState(self.state.restrict(&msg.1)));
         println!("New connection from {}", msg.1);
         self.subs.insert(msg.0, msg.1.clone());
-        self.state.players.insert(msg.1);
+        self.state.join_player(msg.1);
         println!("Connected sockets: {}", self.subs.len());
     }
 }

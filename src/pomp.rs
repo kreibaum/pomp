@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use serde::{Deserialize, Serialize};
+
 use crate::game::PlayerUuid;
 
 /// Contains only core game logic for the Pomp game.
@@ -8,20 +10,11 @@ use crate::game::PlayerUuid;
 /// that is not game logic.)
 
 /// Shared state for one player
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct LiveState {
     count: i32,
     private_count: i32,
     time_elapsed: u64,
-}
-
-impl LiveState {
-    pub fn to_string(&self) -> String {
-        format!(
-            "{{\"count\": {}, \"private_count\":{}, \"time_elapsed\":{} }}",
-            self.count, self.private_count, self.time_elapsed
-        )
-    }
 }
 
 /// Total state of the whole game.
@@ -34,6 +27,7 @@ pub struct GameState {
 }
 
 /// RemoteEvent custom type. This depents on the business logic we have.
+#[derive(Debug, Clone, Deserialize)]
 pub enum RemoteEvent {
     Increment,
     Decrement,

@@ -69,17 +69,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for LiveActor {
 
 impl LiveActor {
     fn handle_text(&mut self, msg: String, _ctx: &mut <LiveActor as Actor>::Context) {
-        if msg == "\"Increment\"" {
-            GameActor::from_registry().do_send(RemoteEventWrapper {
-                event: RemoteEvent::Increment,
-                sender: self.uuid.clone(),
-            });
-        } else if msg == "\"Decrement\"" {
-            GameActor::from_registry().do_send(RemoteEventWrapper {
-                event: RemoteEvent::Decrement,
-                sender: self.uuid.clone(),
-            });
-        }
+        // Try to decode the message as a RemoteEvent with serde JSON
+        let event: RemoteEvent = match serde_json::from_str(&msg) {
+            Ok(event) => event,
+            Err(_) => {
+                println!("Could not decode message as RemoteEvent: {}", msg);
+                return;
+            }
+        };
+
+        GameActor::from_registry().do_send(RemoteEventWrapper {
+            event: event,
+            sender: self.uuid.clone(),
+        });
     }
 
     /// Heartbeat handler that will kill the process if the client dies.
@@ -107,7 +109,7 @@ impl Handler<UpdateLiveState> for LiveActor {
     type Result = ();
 
     fn handle(&mut self, msg: UpdateLiveState, ctx: &mut ws::WebsocketContext<LiveActor>) {
-        ctx.text(msg.0.to_string());
+        ctx.text(serde_json::to_string(&msg.0).unwrap());
     }
 }
 

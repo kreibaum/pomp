@@ -1,7 +1,7 @@
 mod game;
 mod pomp;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use actix::prelude::*;
@@ -144,7 +144,7 @@ impl Actor for GameActor {
 
     // Start game loop when actor starts
     fn started(&mut self, ctx: &mut Self::Context) {
-        ctx.run_interval(GAME_LOOP_INTERVAL, |act, ctx| {
+        ctx.run_interval(GAME_LOOP_INTERVAL, |act, _ctx| {
             act.state.process_tick();
             for sub in act.subs.keys() {
                 sub.do_send(UpdateLiveState(act.state.restrict(&act.subs[sub])));

@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use serde::Serialize;
+
 /** Identifier for players, this way we can play without accounts. */
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct PlayerUuid(String);
@@ -30,4 +32,31 @@ impl PlayerUuid {
 
         None
     }
+}
+
+pub trait LiveStateTrait: Serialize + Send {}
+
+pub trait RemoteEventTrait: Sized {
+    /// TODO: This is ugly, should use serde directly somehow.
+    fn deserialize(s: &str) -> Result<Self, serde_json::Error>;
+}
+
+pub trait GameStateTrait: Default + Unpin + 'static {
+    // Each Game has a type of remote event that it handles.
+    type R: RemoteEventTrait;
+    // As well as a type of live state that it sends to the frontend.
+    type L: LiveStateTrait;
+
+    // Handle events. After every event the current state is send to all clients
+    // so there is no need to think about this in this method.
+    fn process_remote_event(&mut self, event: Self::R, sender: PlayerUuid);
+
+    // Map to the live state that is sent to the frontend.
+    fn restrict(&self, player: &PlayerUuid) -> Self::L;
+
+    // Add a player to the game.
+    fn join_player(&mut self, player: PlayerUuid);
+
+    // Called every tick.
+    fn process_tick(&mut self);
 }

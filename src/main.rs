@@ -1,5 +1,6 @@
 mod game;
 mod pomp;
+mod setup;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -9,8 +10,7 @@ use actix::{Actor, Handler, Message, StreamHandler, Supervised, SystemService};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
-use game::PlayerUuid;
-use pomp::RemoteEvent;
+use game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -20,45 +20,71 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 const GAME_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Remote Events need to track who send them so the game can process them properly.
-struct RemoteEventWrapper {
-    event: RemoteEvent,
+struct RemoteEventRaw {
+    event: String,
     sender: PlayerUuid,
 }
 
-impl Message for RemoteEventWrapper {
+impl Message for RemoteEventRaw {
     type Result = ();
 }
 
-/// The LiveActor is the actor that handles the websocket connection & the LiveState.
-#[derive(Debug)]
-struct LiveActor {
-    hb: Instant,
-    uuid: PlayerUuid,
+// PLEASE REVIEW: This construction does not feel right to me yet.
+enum PageActor {
+    Pomp(Addr<GameActor<pomp::GameState>>),
+    Setup(Addr<GameActor<setup::GameState>>),
 }
 
-impl Actor for LiveActor {
+impl PageActor {
+    // If a message can be send to all the GameActors, the PageActor accepts it.
+    fn do_send<M>(&self, m: M)
+    where
+        M: Message + Send + 'static,
+        M::Result: Send + 'static,
+        GameActor<pomp::GameState>: Handler<M>,
+        GameActor<setup::GameState>: Handler<M>,
+    {
+        match self {
+            PageActor::Pomp(addr) => addr.do_send(m),
+            PageActor::Setup(addr) => addr.do_send(m),
+        }
+    }
+}
+
+/// The LiveActor is the actor that handles the websocket connection & the LiveState.
+/// If several pages share a common state, this is a GameState instead and handled
+/// by the GameActor instead.
+/// To make it possible to transition between different pages, the WebsocketActor
+/// takes care of the Websocket connection and nothing else.
+struct WebsocketActor {
+    hb: Instant,
+    uuid: PlayerUuid,
+    backing_actor: PageActor,
+}
+
+impl Actor for WebsocketActor {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         // Register self to get updates to the game state
-        GameActor::from_registry().do_send(Subscribe(ctx.address(), self.uuid.clone()));
+        self.backing_actor
+            .do_send(Subscribe(ctx.address(), self.uuid.clone()));
         self.hb(ctx);
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         // Unregister self
-        GameActor::from_registry().do_send(Unsubscribe(ctx.address()));
+        self.backing_actor.do_send(Unsubscribe(ctx.address()));
     }
 }
 
 /// Delegate raw websocket messages to better places.
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for LiveActor {
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Pong(_)) => {
                 self.hb = Instant::now();
-                // println!("Pong")
             }
             Ok(ws::Message::Text(text)) => self.handle_text(text, ctx),
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
@@ -67,19 +93,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for LiveActor {
     }
 }
 
-impl LiveActor {
-    fn handle_text(&mut self, msg: String, _ctx: &mut <LiveActor as Actor>::Context) {
-        // Try to decode the message as a RemoteEvent with serde JSON
-        let event: RemoteEvent = match serde_json::from_str(&msg) {
-            Ok(event) => event,
-            Err(_) => {
-                println!("Could not decode message as RemoteEvent: {}", msg);
-                return;
-            }
-        };
-
-        GameActor::from_registry().do_send(RemoteEventWrapper {
-            event: event,
+impl WebsocketActor {
+    fn handle_text(&mut self, msg: String, _ctx: &mut <WebsocketActor as Actor>::Context) {
+        // We can not decode the String into a structure directly inside the
+        // WebsocketActor, because only the GameActor or LiveActor knows about
+        // the right type to deserialize into.
+        self.backing_actor.do_send(RemoteEventRaw {
+            event: msg,
             sender: self.uuid.clone(),
         });
     }
@@ -99,16 +119,16 @@ impl LiveActor {
 }
 
 /// The GameActor tells the LiveActor about the game state.
-struct UpdateLiveState(pomp::LiveState);
+struct UpdateLiveState<T: LiveStateTrait>(T);
 
-impl Message for UpdateLiveState {
+impl<T: LiveStateTrait> Message for UpdateLiveState<T> {
     type Result = ();
 }
 
-impl Handler<UpdateLiveState> for LiveActor {
+impl<T: LiveStateTrait> Handler<UpdateLiveState<T>> for WebsocketActor {
     type Result = ();
 
-    fn handle(&mut self, msg: UpdateLiveState, ctx: &mut ws::WebsocketContext<LiveActor>) {
+    fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
         ctx.text(serde_json::to_string(&msg.0).unwrap());
     }
 }
@@ -117,9 +137,10 @@ impl Handler<UpdateLiveState> for LiveActor {
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     if let Some(uuid) = PlayerUuid::from_query_string(req.query_string()) {
         let resp = ws::start(
-            LiveActor {
+            WebsocketActor {
                 hb: Instant::now(),
                 uuid,
+                backing_actor: PageActor::Pomp(GameActor::<pomp::GameState>::from_registry()),
             },
             &req,
             stream,
@@ -133,13 +154,13 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
 }
 
 /// Actor that holds the shared state
-#[derive(Debug, Default)]
-struct GameActor {
-    state: pomp::GameState,
-    subs: HashMap<Addr<LiveActor>, PlayerUuid>,
+#[derive(Default)]
+struct GameActor<G: GameStateTrait> {
+    state: G,
+    subs: HashMap<Addr<WebsocketActor>, PlayerUuid>,
 }
 
-impl Actor for GameActor {
+impl<G: GameStateTrait> Actor for GameActor<G> {
     type Context = actix::Context<Self>;
 
     // Start game loop when actor starts
@@ -153,19 +174,30 @@ impl Actor for GameActor {
     }
 }
 
-impl Supervised for GameActor {}
+impl<G: GameStateTrait> Supervised for GameActor<G> {}
 
 // TODO: There should be a broker service and then multiple games which each
 // have their own game actor.
-impl SystemService for GameActor {}
+impl<G: GameStateTrait> SystemService for GameActor<G> {}
 
 /// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
 /// Events that are send from the LiveActor to the GameActor.
-impl Handler<RemoteEventWrapper> for GameActor {
+impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
     type Result = ();
 
-    fn handle(&mut self, e: RemoteEventWrapper, _: &mut Self::Context) -> Self::Result {
-        self.state.process_remote_event(e.event, e.sender);
+    fn handle(&mut self, e: RemoteEventRaw, _: &mut Self::Context) -> Self::Result {
+        let event = match RemoteEventTrait::deserialize(&e.event) {
+            Ok(event) => event,
+            Err(_) => {
+                println!(
+                    "Could not decode message as RemoteEvent: {} from sender {}",
+                    e.event, e.sender
+                );
+                return;
+            }
+        };
+
+        self.state.process_remote_event(event, e.sender);
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState(self.state.restrict(&sub.1)));
         }
@@ -173,13 +205,13 @@ impl Handler<RemoteEventWrapper> for GameActor {
 }
 
 /// A LiveActor subscribes to the GameActor to get updates.
-struct Subscribe(Addr<LiveActor>, PlayerUuid);
+struct Subscribe(Addr<WebsocketActor>, PlayerUuid);
 
 impl Message for Subscribe {
     type Result = ();
 }
 
-impl Handler<Subscribe> for GameActor {
+impl<G: GameStateTrait> Handler<Subscribe> for GameActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
@@ -192,16 +224,19 @@ impl Handler<Subscribe> for GameActor {
 }
 
 /// When a LiveActor disconnects, it unsubscribes from the GameActor.
-struct Unsubscribe(Addr<LiveActor>);
+struct Unsubscribe(Addr<WebsocketActor>);
 
 impl Message for Unsubscribe {
     type Result = ();
 }
 
-impl Handler<Unsubscribe> for GameActor {
+impl<G: GameStateTrait> Handler<Unsubscribe> for GameActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Unsubscribe, _: &mut Self::Context) -> Self::Result {
+        // Note that this does not tell the game implementation about the change.
+        // This is because here we just take care of the disconnecting websocket
+        // and the person who left may still be connected in another browser tab.
         self.subs.remove(&msg.0);
         println!("Remaining sockets: {}", self.subs.len());
     }

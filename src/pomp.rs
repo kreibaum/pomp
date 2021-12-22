@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::game::PlayerUuid;
+use crate::game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
 
 /// Contains only core game logic for the Pomp game.
 /// But since "what can a player see" is game logic, the LiveState type is also
@@ -21,6 +21,8 @@ pub struct LiveState {
     earth: u32,
     chaos: u32,
 }
+
+impl LiveStateTrait for LiveState {}
 
 /// Total state of the whole game.
 #[derive(Debug, Default)]
@@ -55,9 +57,18 @@ pub enum RemoteEvent {
     Buy(ElementColor),
 }
 
-impl GameState {
+impl RemoteEventTrait for RemoteEvent {
+    fn deserialize(s: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(s)
+    }
+}
+
+impl GameStateTrait for GameState {
+    type L = LiveState;
+    type R = RemoteEvent;
+
     /// Extract information that is relevant for one player and hide the rest.
-    pub fn restrict(&self, player: &PlayerUuid) -> LiveState {
+    fn restrict(&self, player: &PlayerUuid) -> LiveState {
         let inventory = self
             .inventories
             .get(player)
@@ -72,8 +83,26 @@ impl GameState {
         }
     }
 
+    /// Process a remote event.
+    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) {
+        match event {
+            RemoteEvent::Buy(color) => {
+                let inventory = self.inventories.get_mut(&sender).unwrap();
+                inventory.buy(color);
+            }
+        }
+    }
+
+    /// Adds a player to the game.
+    fn join_player(&mut self, player: PlayerUuid) {
+        if !self.players.contains(&player) {
+            self.players.insert(player.clone());
+            self.inventories.insert(player, PlayerInventory::default());
+        }
+    }
+
     /// Processes a game logic tick.
-    pub fn process_tick(&mut self) {
+    fn process_tick(&mut self) {
         for player in self.players.iter() {
             let inventory = self
                 .inventories
@@ -84,26 +113,6 @@ impl GameState {
                 inventory.enery_fraction_ticks = 0;
                 inventory.energy += 1;
             }
-        }
-    }
-
-    /// Process a remote event.
-    pub fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) {
-        match event {
-            RemoteEvent::Buy(color) => {
-                let inventory = self.inventories.get_mut(&sender).unwrap();
-                inventory.buy(color);
-            }
-        }
-    }
-
-    /// Adds a player to the game.
-    /// TODO: This should be done in some pre-game setup phase.
-    /// For now is is easy enought that we can just mix it in here.
-    pub fn join_player(&mut self, player: PlayerUuid) {
-        if !self.players.contains(&player) {
-            self.players.insert(player.clone());
-            self.inventories.insert(player, PlayerInventory::default());
         }
     }
 }

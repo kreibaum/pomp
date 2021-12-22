@@ -97,6 +97,10 @@ impl GameStateTrait for GameState {
         // Nothing to do, we don't respond to updates.
         // TODO: Make tick frequency configurable by page.
     }
+
+    fn route_id() -> &'static str {
+        "setup"
+    }
 }
 
 fn random_name() -> String {

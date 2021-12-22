@@ -30,8 +30,7 @@ function getUuid(): string {
 function connect_websocket() {
     var ws = new WebSocket(`ws://127.0.0.1:8080/ws?uuid=${getUuid()}`);
     ws.onmessage = function (message) {
-        console.log(message);
-        app.ports.websocketIn.send({ data: JSON.parse(message.data), timeStamp: message.timeStamp });
+        app.ports.websocketIn.send(JSON.parse(message.data));
     };
     app.ports.websocketOut.subscribe(function (msg) { ws.send(JSON.stringify(msg)); });
 }

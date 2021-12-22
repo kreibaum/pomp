@@ -11,6 +11,7 @@ use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
 use game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
+use serde::Serialize;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -119,7 +120,11 @@ impl WebsocketActor {
 }
 
 /// The GameActor tells the LiveActor about the game state.
-struct UpdateLiveState<T: LiveStateTrait>(T);
+#[derive(Serialize)]
+struct UpdateLiveState<T: LiveStateTrait> {
+    route: &'static str,
+    data: T,
+}
 
 impl<T: LiveStateTrait> Message for UpdateLiveState<T> {
     type Result = ();
@@ -129,7 +134,7 @@ impl<T: LiveStateTrait> Handler<UpdateLiveState<T>> for WebsocketActor {
     type Result = ();
 
     fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
-        ctx.text(serde_json::to_string(&msg.0).unwrap());
+        ctx.text(serde_json::to_string(&msg).unwrap());
     }
 }
 
@@ -140,7 +145,8 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
             WebsocketActor {
                 hb: Instant::now(),
                 uuid,
-                backing_actor: PageActor::Pomp(GameActor::<pomp::GameState>::from_registry()),
+                //backing_actor: PageActor::Pomp(GameActor::<pomp::GameState>::from_registry()),
+                backing_actor: PageActor::Setup(GameActor::<setup::GameState>::from_registry()),
             },
             &req,
             stream,
@@ -168,7 +174,10 @@ impl<G: GameStateTrait> Actor for GameActor<G> {
         ctx.run_interval(GAME_LOOP_INTERVAL, |act, _ctx| {
             act.state.process_tick();
             for sub in act.subs.keys() {
-                sub.do_send(UpdateLiveState(act.state.restrict(&act.subs[sub])));
+                sub.do_send(UpdateLiveState {
+                    data: act.state.restrict(&act.subs[sub]),
+                    route: G::route_id(),
+                });
             }
         });
     }
@@ -199,7 +208,10 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
 
         self.state.process_remote_event(event, e.sender);
         for sub in self.subs.iter() {
-            sub.0.do_send(UpdateLiveState(self.state.restrict(&sub.1)));
+            sub.0.do_send(UpdateLiveState {
+                data: self.state.restrict(&sub.1),
+                route: G::route_id(),
+            });
         }
     }
 }
@@ -219,7 +231,10 @@ impl<G: GameStateTrait> Handler<Subscribe> for GameActor<G> {
         self.subs.insert(msg.0.clone(), msg.1.clone());
         self.state.join_player(msg.1.clone());
         println!("Connected sockets: {}", self.subs.len());
-        msg.0.do_send(UpdateLiveState(self.state.restrict(&msg.1)));
+        msg.0.do_send(UpdateLiveState {
+            data: self.state.restrict(&msg.1),
+            route: G::route_id(),
+        });
     }
 }
 

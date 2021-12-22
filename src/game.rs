@@ -59,4 +59,8 @@ pub trait GameStateTrait: Default + Unpin + 'static {
 
     // Called every tick.
     fn process_tick(&mut self);
+
+    // ID used to differentiate this game from others.
+    // Will probably replace this by better routing later.
+    fn route_id() -> &'static str;
 }

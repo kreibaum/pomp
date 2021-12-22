@@ -115,6 +115,10 @@ impl GameStateTrait for GameState {
             }
         }
     }
+
+    fn route_id() -> &'static str {
+        "pomp"
+    }
 }
 
 impl PlayerInventory {

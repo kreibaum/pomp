@@ -2,6 +2,7 @@ mod game;
 mod pomp;
 mod setup;
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -31,6 +32,7 @@ impl Message for RemoteEventRaw {
 }
 
 // PLEASE REVIEW: This construction does not feel right to me yet.
+#[derive(Clone)]
 enum PageActor {
     Pomp(Addr<GameActor<pomp::GameState>>),
     Setup(Addr<GameActor<setup::GameState>>),
@@ -138,6 +140,30 @@ impl<T: LiveStateTrait> Handler<UpdateLiveState<T>> for WebsocketActor {
     }
 }
 
+struct PerformLiveRedirect(PageActor);
+
+impl Message for PerformLiveRedirect {
+    type Result = ();
+}
+
+impl Handler<PerformLiveRedirect> for WebsocketActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: PerformLiveRedirect, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
+        self.backing_actor = msg.0;
+    }
+}
+
+fn get_actor_reference(game_state: &str) -> PageActor {
+    if pomp::GameState::route_id() == game_state {
+        PageActor::Pomp(GameActor::<pomp::GameState>::from_registry())
+    } else if setup::GameState::route_id() == game_state {
+        PageActor::Setup(GameActor::<setup::GameState>::from_registry())
+    } else {
+        panic!("Unknown game state type");
+    }
+}
+
 /// Sets up a websocket connection ensuring there is a uuid.
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     if let Some(uuid) = PlayerUuid::from_query_string(req.query_string()) {
@@ -206,7 +232,33 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
             }
         };
 
-        self.state.process_remote_event(event, e.sender);
+        let effect = self.state.process_remote_event(event, e.sender);
+        match effect {
+            game::LiveEffect::None => {}
+            game::LiveEffect::LiveRedirect(game_state) => {
+                let new_ref = get_actor_reference(&game_state);
+
+                for sub in self.subs.iter() {
+                    sub.0.do_send(PerformLiveRedirect(new_ref.clone()));
+
+                    // TODO: Send the new state to the actor
+                    if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>() {
+                        sub.0.do_send(UpdateLiveState {
+                            data: game_state.restrict(&sub.1),
+                            route: pomp::GameState::route_id(),
+                        });
+                    } else if let Some(game_state) = game_state.downcast_ref::<setup::GameState>() {
+                        sub.0.do_send(UpdateLiveState {
+                            data: game_state.restrict(&sub.1),
+                            route: setup::GameState::route_id(),
+                        });
+                    } else {
+                        panic!("Unknown game state type");
+                    }
+                }
+            }
+        }
+
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState {
                 data: self.state.restrict(&sub.1),

@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use crate::game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
+use crate::{
+    game::{GameStateTrait, LiveEffect, LiveStateTrait, PlayerUuid, RemoteEventTrait},
+    pomp,
+};
 /// Setting up a game of pomp. When you are done, you can forward all the
 /// connected players to the pomp LiveState.
 
 #[derive(Debug)]
 pub struct GameState {
     // This is intentionally not a HashMap, because we need an ordering.
-    data: Vec<(PlayerUuid, PlayerSetupData)>,
+    pub data: Vec<(PlayerUuid, PlayerSetupData)>,
 }
 
 impl Default for GameState {
@@ -17,7 +20,7 @@ impl Default for GameState {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct PlayerSetupData {
+pub struct PlayerSetupData {
     is_ready: bool,
     name: String,
 }
@@ -49,18 +52,18 @@ impl GameStateTrait for GameState {
     type R = RemoteEvent;
 
     /// Process a remote event.
-    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) {
+    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) -> LiveEffect {
         let data = self.data.iter_mut().find(|(uuid, _)| uuid == &sender);
         if let Some(data) = data {
             match event {
                 RemoteEvent::SetName(name) => data.1.name = name,
                 RemoteEvent::SetReady(ready) => data.1.is_ready = ready,
                 RemoteEvent::StartGame => {
-                    // TODO: Communicate with the LiveState runtime that we want
-                    // to transition to a different game actor now.
+                    return LiveEffect::LiveRedirect(pomp::GameState::route_id().to_owned());
                 }
             }
         }
+        return LiveEffect::None;
     }
 
     /// Extract information that is relevant for one player and hide the rest.
@@ -78,10 +81,10 @@ impl GameStateTrait for GameState {
     }
 
     /// This happens every time a connection is established.
-    fn join_player(&mut self, player: PlayerUuid) {
+    fn join_player(&mut self, player: PlayerUuid) -> LiveEffect {
         // Check if this uuid is already inside.
         if self.data.iter().any(|(uuid, _)| uuid == &player) {
-            return;
+            return LiveEffect::None;
         }
 
         self.data.push((
@@ -91,11 +94,15 @@ impl GameStateTrait for GameState {
                 name: random_name(),
             },
         ));
+        // TODO: Check if there is already a game running. If so, redirect the
+        // player to the game.
+        LiveEffect::None
     }
 
-    fn process_tick(&mut self) {
+    fn process_tick(&mut self) -> LiveEffect {
         // Nothing to do, we don't respond to updates.
         // TODO: Make tick frequency configurable by page.
+        LiveEffect::None
     }
 
     fn route_id() -> &'static str {

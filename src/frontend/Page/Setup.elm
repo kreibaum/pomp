@@ -26,4 +26,5 @@ viewPlayerData data =
                         " is not ready."
                    )
             )
+        , button [ onClick StartGame ] [ text "Start Game" ]
         ]

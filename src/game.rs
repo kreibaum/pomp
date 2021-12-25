@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{any::Any, fmt::Display};
 
 use serde::Serialize;
 
@@ -41,7 +41,7 @@ pub trait RemoteEventTrait: Sized {
     fn deserialize(s: &str) -> Result<Self, serde_json::Error>;
 }
 
-pub trait GameStateTrait: Default + Unpin + 'static {
+pub trait GameStateTrait: Default + Unpin + Any + 'static {
     // Each Game has a type of remote event that it handles.
     type R: RemoteEventTrait;
     // As well as a type of live state that it sends to the frontend.
@@ -49,18 +49,28 @@ pub trait GameStateTrait: Default + Unpin + 'static {
 
     // Handle events. After every event the current state is send to all clients
     // so there is no need to think about this in this method.
-    fn process_remote_event(&mut self, event: Self::R, sender: PlayerUuid);
+    fn process_remote_event(&mut self, event: Self::R, sender: PlayerUuid) -> LiveEffect;
 
     // Map to the live state that is sent to the frontend.
     fn restrict(&self, player: &PlayerUuid) -> Self::L;
 
     // Add a player to the game.
-    fn join_player(&mut self, player: PlayerUuid);
+    // This has a live effect, because a player may join a "preparation" page
+    // a little bit too late. Then they would be redirected into the active
+    // game as a spectator.
+    fn join_player(&mut self, player: PlayerUuid) -> LiveEffect;
 
     // Called every tick.
-    fn process_tick(&mut self);
+    fn process_tick(&mut self) -> LiveEffect;
 
     // ID used to differentiate this game from others.
     // Will probably replace this by better routing later.
     fn route_id() -> &'static str;
+}
+
+/// Encapsulate possible effects that the game implementation can trigger into
+/// the live state system.
+pub enum LiveEffect {
+    None,                 // Equivalent to Cmd.none from Elm.
+    LiveRedirect(String), // Not sure if "Any" can be avoided here.
 }

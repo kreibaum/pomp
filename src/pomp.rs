@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
+use crate::{
+    game::{GameStateTrait, LiveEffect, LiveStateTrait, PlayerUuid, RemoteEventTrait},
+    setup,
+};
 
 /// Contains only core game logic for the Pomp game.
 /// But since "what can a player see" is game logic, the LiveState type is also
@@ -40,6 +43,21 @@ struct PlayerInventory {
     water: u32,
     earth: u32,
     chaos: u32,
+}
+
+impl GameState {
+    pub fn from_setup(setup_data: &setup::GameState) -> Self {
+        let mut players = HashSet::new();
+        let mut inventories = HashMap::new();
+        for (uuid, _setup_data) in &setup_data.data {
+            players.insert(uuid.clone());
+            inventories.insert(uuid.clone(), PlayerInventory::default());
+        }
+        GameState {
+            players,
+            inventories,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,25 +102,27 @@ impl GameStateTrait for GameState {
     }
 
     /// Process a remote event.
-    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) {
+    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) -> LiveEffect {
         match event {
             RemoteEvent::Buy(color) => {
                 let inventory = self.inventories.get_mut(&sender).unwrap();
                 inventory.buy(color);
             }
         }
+        LiveEffect::None
     }
 
     /// Adds a player to the game.
-    fn join_player(&mut self, player: PlayerUuid) {
+    fn join_player(&mut self, player: PlayerUuid) -> LiveEffect {
         if !self.players.contains(&player) {
             self.players.insert(player.clone());
             self.inventories.insert(player, PlayerInventory::default());
         }
+        LiveEffect::None
     }
 
     /// Processes a game logic tick.
-    fn process_tick(&mut self) {
+    fn process_tick(&mut self) -> LiveEffect {
         for player in self.players.iter() {
             let inventory = self
                 .inventories
@@ -114,6 +134,7 @@ impl GameStateTrait for GameState {
                 inventory.energy += 1;
             }
         }
+        LiveEffect::None
     }
 
     fn route_id() -> &'static str {

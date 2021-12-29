@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    game::{GameStateTrait, LiveEffect, LiveStateTrait, PlayerUuid, RemoteEventTrait},
+    game::{LiveEffect, RemoteEvent, SharedLiveState, UserUuid, UserView},
     setup,
 };
 
@@ -16,7 +16,7 @@ const TICKS_PER_ENERGY: u8 = 10;
 
 /// Shared state for one player
 #[derive(Debug, Default, Clone, Serialize)]
-pub struct LiveState {
+pub struct PompPlayerView {
     energy: u32,
     fire: u32,
     plant: u32,
@@ -25,13 +25,13 @@ pub struct LiveState {
     chaos: u32,
 }
 
-impl LiveStateTrait for LiveState {}
+impl UserView for PompPlayerView {}
 
 /// Total state of the whole game.
 #[derive(Debug, Default)]
 pub struct GameState {
-    players: HashSet<PlayerUuid>,
-    inventories: HashMap<PlayerUuid, PlayerInventory>,
+    players: HashSet<UserUuid>,
+    inventories: HashMap<UserUuid, PlayerInventory>,
 }
 
 #[derive(Debug, Default)]
@@ -71,27 +71,27 @@ pub enum ElementColor {
 
 /// RemoteEvent custom type. This depents on the business logic we have.
 #[derive(Debug, Clone, Deserialize)]
-pub enum RemoteEvent {
+pub enum PompEvent {
     Buy(ElementColor),
 }
 
-impl RemoteEventTrait for RemoteEvent {
+impl RemoteEvent for PompEvent {
     fn deserialize(s: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(s)
     }
 }
 
-impl GameStateTrait for GameState {
-    type L = LiveState;
-    type R = RemoteEvent;
+impl SharedLiveState for GameState {
+    type View = PompPlayerView;
+    type Event = PompEvent;
 
     /// Extract information that is relevant for one player and hide the rest.
-    fn restrict(&self, player: &PlayerUuid) -> LiveState {
+    fn user_view(&self, player: &UserUuid) -> PompPlayerView {
         let inventory = self
             .inventories
             .get(player)
             .expect("Player inventory not found");
-        LiveState {
+        PompPlayerView {
             energy: inventory.energy,
             fire: inventory.fire,
             plant: inventory.plant,
@@ -102,9 +102,9 @@ impl GameStateTrait for GameState {
     }
 
     /// Process a remote event.
-    fn process_remote_event(&mut self, event: RemoteEvent, sender: PlayerUuid) -> LiveEffect {
+    fn process_remote_event(&mut self, event: PompEvent, sender: UserUuid) -> LiveEffect {
         match event {
-            RemoteEvent::Buy(color) => {
+            PompEvent::Buy(color) => {
                 let inventory = self.inventories.get_mut(&sender).unwrap();
                 inventory.buy(color);
             }
@@ -113,7 +113,7 @@ impl GameStateTrait for GameState {
     }
 
     /// Adds a player to the game.
-    fn join_player(&mut self, player: PlayerUuid) -> LiveEffect {
+    fn join_user(&mut self, player: UserUuid) -> LiveEffect {
         if !self.players.contains(&player) {
             self.players.insert(player.clone());
             self.inventories.insert(player, PlayerInventory::default());

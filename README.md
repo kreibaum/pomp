@@ -38,12 +38,10 @@ fields where we don't want to send each Keystroke to the server directly.
 In simple cases there is no _ClientState_ which saves us a bunch of boilerplate
 on the client.
 
-### PlayerUuid
+### UserUuid
 
 A secret uuid for each (ephemeral) user that is connected to the system.
 This uuid is stored in LocalStorage and persists across reloads.
-
-Needs to be renamed to something less game centric.
 
 ## Actors
 

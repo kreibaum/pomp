@@ -1,18 +1,20 @@
+//! This module holds all the general framework types that should be used in user code.
+
 use std::{any::Any, fmt::Display};
 
 use serde::Serialize;
 
 /** Identifier for players, this way we can play without accounts. */
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
-pub struct PlayerUuid(String);
+pub struct UserUuid(String);
 
-impl Display for PlayerUuid {
+impl Display for UserUuid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl PlayerUuid {
+impl UserUuid {
     /** Login happens via /ws?uuid=... this parses the "uuid=..." part for you. */
     pub fn from_query_string(query_string: &str) -> Option<Self> {
         use lazy_static::lazy_static;
@@ -26,7 +28,7 @@ impl PlayerUuid {
 
         if let Some(cap) = RE.captures_iter(&query_string.to_uppercase()).next() {
             if let Some(uuid) = cap.get(1) {
-                return Some(PlayerUuid(uuid.as_str().to_owned()));
+                return Some(UserUuid(uuid.as_str().to_owned()));
             }
         }
 
@@ -34,34 +36,38 @@ impl PlayerUuid {
     }
 }
 
-pub trait LiveStateTrait: Serialize + Send {}
+/// We don't want to expose the full actual `LiveState` or `SharedLiveState` to the
+/// client. Instead both of these must be turned into a `UserView` before being
+/// send to the client in a websocket message.
+pub trait UserView: Serialize + Send {}
 
-pub trait RemoteEventTrait: Sized {
+pub trait RemoteEvent: Sized {
     /// TODO: This is ugly, should use serde directly somehow.
     fn deserialize(s: &str) -> Result<Self, serde_json::Error>;
 }
 
-pub trait GameStateTrait: Default + Unpin + Any + 'static {
+/// Variation of a `LiveState` that is shared between users.
+pub trait SharedLiveState: Default + Unpin + Any + 'static {
     // Each Game has a type of remote event that it handles.
-    type R: RemoteEventTrait;
+    type Event: RemoteEvent;
     // As well as a type of live state that it sends to the frontend.
-    type L: LiveStateTrait;
+    type View: UserView;
+
+    // Map to the live state that is sent to the frontend.
+    fn user_view(&self, player: &UserUuid) -> Self::View;
 
     // Handle events. After every event the current state is send to all clients
     // so there is no need to think about this in this method.
-    fn process_remote_event(&mut self, event: Self::R, sender: PlayerUuid) -> LiveEffect;
+    fn process_remote_event(&mut self, event: Self::Event, sender: UserUuid) -> LiveEffect;
 
-    // Map to the live state that is sent to the frontend.
-    fn restrict(&self, player: &PlayerUuid) -> Self::L;
+    // Called every tick.
+    fn process_tick(&mut self) -> LiveEffect;
 
     // Add a player to the game.
     // This has a live effect, because a player may join a "preparation" page
     // a little bit too late. Then they would be redirected into the active
     // game as a spectator.
-    fn join_player(&mut self, player: PlayerUuid) -> LiveEffect;
-
-    // Called every tick.
-    fn process_tick(&mut self) -> LiveEffect;
+    fn join_user(&mut self, player: UserUuid) -> LiveEffect;
 
     // ID used to differentiate this game from others.
     // Will probably replace this by better routing later.

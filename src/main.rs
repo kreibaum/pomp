@@ -2,7 +2,7 @@ mod game;
 mod pomp;
 mod setup;
 
-use std::any::{Any, TypeId};
+use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -11,7 +11,7 @@ use actix::{Actor, Handler, Message, StreamHandler, Supervised, SystemService};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
-use game::{GameStateTrait, LiveStateTrait, PlayerUuid, RemoteEventTrait};
+use game::{RemoteEvent, SharedLiveState, UserUuid, UserView};
 use serde::Serialize;
 
 /// How often heartbeat pings are sent
@@ -24,7 +24,7 @@ const GAME_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 /// Remote Events need to track who send them so the game can process them properly.
 struct RemoteEventRaw {
     event: String,
-    sender: PlayerUuid,
+    sender: UserUuid,
 }
 
 impl Message for RemoteEventRaw {
@@ -61,7 +61,7 @@ impl PageActor {
 /// takes care of the Websocket connection and nothing else.
 struct WebsocketActor {
     hb: Instant,
-    uuid: PlayerUuid,
+    uuid: UserUuid,
     backing_actor: PageActor,
 }
 
@@ -123,16 +123,16 @@ impl WebsocketActor {
 
 /// The GameActor tells the LiveActor about the game state.
 #[derive(Serialize)]
-struct UpdateLiveState<T: LiveStateTrait> {
+struct UpdateLiveState<T: UserView> {
     route: &'static str,
     data: T,
 }
 
-impl<T: LiveStateTrait> Message for UpdateLiveState<T> {
+impl<T: UserView> Message for UpdateLiveState<T> {
     type Result = ();
 }
 
-impl<T: LiveStateTrait> Handler<UpdateLiveState<T>> for WebsocketActor {
+impl<T: UserView> Handler<UpdateLiveState<T>> for WebsocketActor {
     type Result = ();
 
     fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
@@ -167,7 +167,7 @@ fn get_actor_reference(game_state: &str) -> PageActor {
 
 /// Sets up a websocket connection ensuring there is a uuid.
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    if let Some(uuid) = PlayerUuid::from_query_string(req.query_string()) {
+    if let Some(uuid) = UserUuid::from_query_string(req.query_string()) {
         let resp = ws::start(
             WebsocketActor {
                 hb: Instant::now(),
@@ -188,12 +188,12 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
 
 /// Actor that holds the shared state
 #[derive(Default)]
-struct GameActor<G: GameStateTrait> {
+struct GameActor<G: SharedLiveState> {
     state: G,
-    subs: HashMap<Addr<WebsocketActor>, PlayerUuid>,
+    subs: HashMap<Addr<WebsocketActor>, UserUuid>,
 }
 
-impl<G: GameStateTrait> Actor for GameActor<G> {
+impl<G: SharedLiveState> Actor for GameActor<G> {
     type Context = actix::Context<Self>;
 
     // Start game loop when actor starts
@@ -202,7 +202,7 @@ impl<G: GameStateTrait> Actor for GameActor<G> {
             act.state.process_tick();
             for sub in act.subs.keys() {
                 sub.do_send(UpdateLiveState {
-                    data: act.state.restrict(&act.subs[sub]),
+                    data: act.state.user_view(&act.subs[sub]),
                     route: G::route_id(),
                 });
             }
@@ -210,19 +210,19 @@ impl<G: GameStateTrait> Actor for GameActor<G> {
     }
 }
 
-impl<G: GameStateTrait> Supervised for GameActor<G> {}
+impl<G: SharedLiveState> Supervised for GameActor<G> {}
 
 // TODO: There should be a broker service and then multiple games which each
 // have their own game actor.
-impl<G: GameStateTrait> SystemService for GameActor<G> {}
+impl<G: SharedLiveState> SystemService for GameActor<G> {}
 
 /// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
 /// Events that are send from the LiveActor to the GameActor.
-impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
+impl<G: SharedLiveState> Handler<RemoteEventRaw> for GameActor<G> {
     type Result = ();
 
     fn handle(&mut self, e: RemoteEventRaw, ctx: &mut Self::Context) -> Self::Result {
-        let event = match RemoteEventTrait::deserialize(&e.event) {
+        let event = match RemoteEvent::deserialize(&e.event) {
             Ok(event) => event,
             Err(_) => {
                 println!(
@@ -260,12 +260,12 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
                     if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>() {
                         println!("Sending Pomp state to new actor");
                         sub.0.do_send(UpdateLiveState {
-                            data: game_state.restrict(&sub.1),
+                            data: game_state.user_view(&sub.1),
                             route: pomp::GameState::route_id(),
                         });
                     } else if let Some(game_state) = game_state.downcast_ref::<setup::GameState>() {
                         sub.0.do_send(UpdateLiveState {
-                            data: game_state.restrict(&sub.1),
+                            data: game_state.user_view(&sub.1),
                             route: setup::GameState::route_id(),
                         });
                     } else {
@@ -281,7 +281,7 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
 
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState {
-                data: self.state.restrict(&sub.1),
+                data: self.state.user_view(&sub.1),
                 route: G::route_id(),
             });
         }
@@ -289,22 +289,22 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
 }
 
 /// A LiveActor subscribes to the GameActor to get updates.
-struct Subscribe(Addr<WebsocketActor>, PlayerUuid);
+struct Subscribe(Addr<WebsocketActor>, UserUuid);
 
 impl Message for Subscribe {
     type Result = ();
 }
 
-impl<G: GameStateTrait> Handler<Subscribe> for GameActor<G> {
+impl<G: SharedLiveState> Handler<Subscribe> for GameActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
         println!("New connection from {}", msg.1);
         self.subs.insert(msg.0.clone(), msg.1.clone());
-        self.state.join_player(msg.1.clone());
+        self.state.join_user(msg.1.clone());
         println!("Connected sockets: {}", self.subs.len());
         msg.0.do_send(UpdateLiveState {
-            data: self.state.restrict(&msg.1),
+            data: self.state.user_view(&msg.1),
             route: G::route_id(),
         });
     }
@@ -317,7 +317,7 @@ impl Message for Unsubscribe {
     type Result = ();
 }
 
-impl<G: GameStateTrait> Handler<Unsubscribe> for GameActor<G> {
+impl<G: SharedLiveState> Handler<Unsubscribe> for GameActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Unsubscribe, _: &mut Self::Context) -> Self::Result {

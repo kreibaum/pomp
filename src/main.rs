@@ -32,8 +32,8 @@ impl Message for RemoteEventRaw {
 // PLEASE REVIEW: This construction does not feel right to me yet.
 #[derive(Clone)]
 enum PageActor {
-    Pomp(Addr<GameActor<pomp::GameState>>),
-    Setup(Addr<GameActor<setup::GameState>>),
+    Pomp(Addr<SharedLiveActor<pomp::GameState>>),
+    Setup(Addr<SharedLiveActor<setup::GameState>>),
 }
 
 impl PageActor {
@@ -42,8 +42,8 @@ impl PageActor {
     where
         M: Message + Send + 'static,
         M::Result: Send + 'static,
-        GameActor<pomp::GameState>: Handler<M>,
-        GameActor<setup::GameState>: Handler<M>,
+        SharedLiveActor<pomp::GameState>: Handler<M>,
+        SharedLiveActor<setup::GameState>: Handler<M>,
     {
         match self {
             PageActor::Pomp(addr) => addr.do_send(m),
@@ -155,9 +155,9 @@ impl Handler<PerformLiveRedirect> for WebsocketActor {
 
 fn get_actor_reference(game_state: &str) -> PageActor {
     if pomp::GameState::route_id() == game_state {
-        PageActor::Pomp(GameActor::<pomp::GameState>::from_registry())
+        PageActor::Pomp(SharedLiveActor::<pomp::GameState>::from_registry())
     } else if setup::GameState::route_id() == game_state {
-        PageActor::Setup(GameActor::<setup::GameState>::from_registry())
+        PageActor::Setup(SharedLiveActor::<setup::GameState>::from_registry())
     } else {
         panic!("Unknown game state type");
     }
@@ -171,7 +171,9 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
                 hb: Instant::now(),
                 uuid,
                 //backing_actor: PageActor::Pomp(GameActor::<pomp::GameState>::from_registry()),
-                backing_actor: PageActor::Setup(GameActor::<setup::GameState>::from_registry()),
+                backing_actor: PageActor::Setup(
+                    SharedLiveActor::<setup::GameState>::from_registry(),
+                ),
             },
             &req,
             stream,
@@ -186,12 +188,12 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
 
 /// Actor that holds the shared state
 #[derive(Default)]
-struct GameActor<G: SharedLiveState> {
-    state: G,
+struct SharedLiveActor<S: SharedLiveState> {
+    state: S,
     subs: HashMap<Addr<WebsocketActor>, UserUuid>,
 }
 
-impl<G: SharedLiveState> Actor for GameActor<G> {
+impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
     type Context = actix::Context<Self>;
 
     // Start game loop when actor starts
@@ -210,15 +212,15 @@ impl<G: SharedLiveState> Actor for GameActor<G> {
     }
 }
 
-impl<G: SharedLiveState> Supervised for GameActor<G> {}
+impl<G: SharedLiveState> Supervised for SharedLiveActor<G> {}
 
 // TODO: There should be a broker service and then multiple games which each
 // have their own game actor.
-impl<G: SharedLiveState> SystemService for GameActor<G> {}
+impl<G: SharedLiveState> SystemService for SharedLiveActor<G> {}
 
 /// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
 /// Events that are send from the LiveActor to the GameActor.
-impl<G: SharedLiveState> Handler<RemoteEventRaw> for GameActor<G> {
+impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
     type Result = ();
 
     fn handle(&mut self, e: RemoteEventRaw, ctx: &mut Self::Context) -> Self::Result {
@@ -295,7 +297,7 @@ impl Message for Subscribe {
     type Result = ();
 }
 
-impl<G: SharedLiveState> Handler<Subscribe> for GameActor<G> {
+impl<G: SharedLiveState> Handler<Subscribe> for SharedLiveActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
@@ -317,7 +319,7 @@ impl Message for Unsubscribe {
     type Result = ();
 }
 
-impl<G: SharedLiveState> Handler<Unsubscribe> for GameActor<G> {
+impl<G: SharedLiveState> Handler<Unsubscribe> for SharedLiveActor<G> {
     type Result = ();
 
     fn handle(&mut self, msg: Unsubscribe, _: &mut Self::Context) -> Self::Result {

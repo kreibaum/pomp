@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -112,13 +115,9 @@ impl SharedLiveState for GameState {
         LiveEffect::None
     }
 
-    /// Adds a player to the game.
-    fn join_user(&mut self, player: UserUuid) -> LiveEffect {
-        if !self.players.contains(&player) {
-            self.players.insert(player.clone());
-            self.inventories.insert(player, PlayerInventory::default());
-        }
-        LiveEffect::None
+    fn tick_frequency(&self) -> Option<Duration> {
+        // Game Loop runs at 5 fps
+        Some(Duration::from_millis(200))
     }
 
     /// Processes a game logic tick.
@@ -133,6 +132,15 @@ impl SharedLiveState for GameState {
                 inventory.enery_fraction_ticks = 0;
                 inventory.energy += 1;
             }
+        }
+        LiveEffect::None
+    }
+
+    /// Adds a player to the game.
+    fn join_user(&mut self, player: UserUuid) -> LiveEffect {
+        if !self.players.contains(&player) {
+            self.players.insert(player.clone());
+            self.inventories.insert(player, PlayerInventory::default());
         }
         LiveEffect::None
     }

@@ -18,8 +18,6 @@ use serde::Serialize;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
-/// Game Loop runs at 5 fps
-const GAME_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Remote Events need to track who send them so the game can process them properly.
 struct RemoteEventRaw {
@@ -198,15 +196,17 @@ impl<G: SharedLiveState> Actor for GameActor<G> {
 
     // Start game loop when actor starts
     fn started(&mut self, ctx: &mut Self::Context) {
-        ctx.run_interval(GAME_LOOP_INTERVAL, |act, _ctx| {
-            act.state.process_tick();
-            for sub in act.subs.keys() {
-                sub.do_send(UpdateLiveState {
-                    data: act.state.user_view(&act.subs[sub]),
-                    route: G::route_id(),
-                });
-            }
-        });
+        if let Some(duration) = self.state.tick_frequency() {
+            ctx.run_interval(duration, |act, _ctx| {
+                act.state.process_tick();
+                for sub in act.subs.keys() {
+                    sub.do_send(UpdateLiveState {
+                        data: act.state.user_view(&act.subs[sub]),
+                        route: G::route_id(),
+                    });
+                }
+            });
+        }
     }
 }
 

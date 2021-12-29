@@ -51,6 +51,20 @@ impl SharedLiveState for GameState {
     type View = SetupPlayerView;
     type Event = SetupEvent;
 
+    /// Extract information that is relevant for one player and hide the rest.
+    fn user_view(&self, player: &UserUuid) -> SetupPlayerView {
+        let mut my_index = -1;
+        let mut data = Vec::new();
+        for (i, (uuid, setup_data)) in self.data.iter().enumerate() {
+            if uuid == player {
+                my_index = i as isize;
+            }
+            data.push(setup_data.clone());
+        }
+
+        SetupPlayerView { data, my_index }
+    }
+
     /// Process a remote event.
     fn process_remote_event(&mut self, event: SetupEvent, sender: UserUuid) -> LiveEffect {
         let data = self.data.iter_mut().find(|(uuid, _)| uuid == &sender);
@@ -65,20 +79,6 @@ impl SharedLiveState for GameState {
             }
         }
         return LiveEffect::None;
-    }
-
-    /// Extract information that is relevant for one player and hide the rest.
-    fn user_view(&self, player: &UserUuid) -> SetupPlayerView {
-        let mut my_index = -1;
-        let mut data = Vec::new();
-        for (i, (uuid, setup_data)) in self.data.iter().enumerate() {
-            if uuid == player {
-                my_index = i as isize;
-            }
-            data.push(setup_data.clone());
-        }
-
-        SetupPlayerView { data, my_index }
     }
 
     /// This happens every time a connection is established.
@@ -97,12 +97,6 @@ impl SharedLiveState for GameState {
         ));
         // TODO: Check if there is already a game running. If so, redirect the
         // player to the game.
-        LiveEffect::None
-    }
-
-    fn process_tick(&mut self) -> LiveEffect {
-        // Nothing to do, we don't respond to updates.
-        // TODO: Make tick frequency configurable by page.
         LiveEffect::None
     }
 

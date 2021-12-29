@@ -1,6 +1,6 @@
 //! This module holds all the general framework types that should be used in user code.
 
-use std::{any::Any, fmt::Display};
+use std::{any::Any, fmt::Display, time::Duration};
 
 use serde::Serialize;
 
@@ -60,8 +60,17 @@ pub trait SharedLiveState: Default + Unpin + Any + 'static {
     // so there is no need to think about this in this method.
     fn process_remote_event(&mut self, event: Self::Event, sender: UserUuid) -> LiveEffect;
 
-    // Called every tick.
-    fn process_tick(&mut self) -> LiveEffect;
+    /// Define how often this live state should process a tick.
+    /// If you don't define it, you don't need to process ticks at all.
+    fn tick_frequency(&self) -> Option<Duration> {
+        None
+    }
+
+    /// Called every tick. If you don't set a tick frequency, this is never called.
+    /// If you don't define this, it does nothing.
+    fn process_tick(&mut self) -> LiveEffect {
+        LiveEffect::None
+    }
 
     // Add a player to the game.
     // This has a live effect, because a player may join a "preparation" page

@@ -33,11 +33,15 @@ impl Message for RemoteEventRaw {
     type Result = ();
 }
 
-/// The LiveActor is the actor that handles the websocket connection & the LiveState.
-/// If several pages share a common state, this is a GameState instead and handled
-/// by the GameActor instead.
-/// To make it possible to transition between different pages, the WebsocketActor
-/// takes care of the Websocket connection and nothing else.
+/// The `WebsocketActor` takes care of the websocket connection. It forwards the
+/// current `UserView` (LiveState) to the client. It also tracks which
+/// `LiveActor` it is connected to and will send `RemoteEvent`s to the correct
+/// `LiveActor`.
+///
+/// The `WebsocketActor` keeps the websocket connection open, even while live
+/// navigation is happening.
+///
+/// It also handles the heartbeat pings.
 struct WebsocketActor {
     hb: Instant,
     uuid: UserUuid,
@@ -70,7 +74,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
                 self.hb = Instant::now();
             }
             Ok(ws::Message::Text(text)) => self.handle_text(text, ctx),
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+            Ok(ws::Message::Binary(_)) => {
+                debug!("Received binary message which is not expected.");
+            }
             _ => (),
         }
     }

@@ -7,16 +7,10 @@ use crate::{
 /// Setting up a game of pomp. When you are done, you can forward all the
 /// connected players to the pomp LiveState.
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GameState {
     // This is intentionally not a HashMap, because we need an ordering.
     pub data: Vec<(UserUuid, PlayerSetupData)>,
-}
-
-impl Default for GameState {
-    fn default() -> Self {
-        GameState { data: Vec::new() }
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,7 +72,7 @@ impl SharedLiveState for GameState {
                 }
             }
         }
-        return LiveEffect::None;
+        LiveEffect::None
     }
 
     /// This happens every time a connection is established.
@@ -139,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_random_name() {
-        assert!(random_name().len() > 0);
+        assert!(!random_name().is_empty());
     }
 
     #[test]

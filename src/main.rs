@@ -160,7 +160,7 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
                     "Internal Server Error in the actor system. (Mailbox Error)",
                 )
             })?
-            .ok_or(actix_web::error::ErrorNotFound("Route not found."))?;
+            .ok_or_else(|| actix_web::error::ErrorNotFound("Route not found."))?;
 
         let resp = ws::start(
             WebsocketActor {
@@ -230,7 +230,7 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
                     e.sender,
                     G::route_id()
                 );
-                return Box::pin(async move { () });
+                return Box::pin(async move {});
             }
         };
 
@@ -265,12 +265,12 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
 
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState {
-                data: self.state.user_view(&sub.1),
+                data: self.state.user_view(sub.1),
                 route: G::route_id(),
             });
         }
 
-        Box::pin(async move { () })
+        Box::pin(async move {})
     }
 }
 
@@ -287,14 +287,14 @@ impl<G: SharedLiveState> Handler<Subscribe> for SharedLiveActor<G> {
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
         println!("New connection from {}", msg.1);
         self.subs.insert(msg.0.clone(), msg.1.clone());
-        self.state.join_user(msg.1.clone());
+        self.state.join_user(msg.1);
         println!("Connected sockets: {}", self.subs.len());
 
         // A new user joining usually updates the state. Sending this to all
         // users directly.
         for sub in self.subs.iter() {
             sub.0.do_send(UpdateLiveState {
-                data: self.state.user_view(&sub.1),
+                data: self.state.user_view(sub.1),
                 route: G::route_id(),
             });
         }

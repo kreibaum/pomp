@@ -74,7 +74,7 @@ impl SharedLiveState for GameState {
                 SetupEvent::SetReady(ready) => data.1.is_ready = ready,
                 SetupEvent::StartGame => {
                     let game = pomp::GameState::from_setup(self);
-                    return LiveEffect::LiveRedirect(Box::new(game));
+                    return LiveEffect::LiveRedirect("/pomp/1".to_owned(), Box::new(game));
                 }
             }
         }

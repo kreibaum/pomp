@@ -13,7 +13,7 @@ use actix_web_actors::ws;
 
 use game::{RemoteEvent, SharedLiveState, UserUuid, UserView};
 use lazy_static::lazy_static;
-use log::{debug, info};
+use log::{debug, error, info};
 use regex::Regex;
 use serde::Serialize;
 use temp::BoxAddr;
@@ -129,12 +129,10 @@ impl Message for PerformLiveRedirect {
 impl Handler<PerformLiveRedirect> for WebsocketActor {
     type Result = ();
 
-    fn handle(
-        &mut self,
-        msg: PerformLiveRedirect,
-        _ctx: &mut ws::WebsocketContext<WebsocketActor>,
-    ) {
+    fn handle(&mut self, msg: PerformLiveRedirect, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
         self.backing_actor = msg.0;
+        self.backing_actor
+            .do_send(Subscribe(ctx.address(), self.uuid.clone()));
     }
 }
 
@@ -177,6 +175,15 @@ struct SharedLiveActor<S: SharedLiveState> {
     subs: HashMap<Addr<WebsocketActor>, UserUuid>,
 }
 
+impl<S: SharedLiveState> SharedLiveActor<S> {
+    fn new(state: S) -> Self {
+        Self {
+            state,
+            subs: HashMap::new(),
+        }
+    }
+}
+
 impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
     type Context = actix::Context<Self>;
 
@@ -199,7 +206,7 @@ impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
 /// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
 /// Events that are send from the LiveActor to the GameActor.
 impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
-    type Result = ();
+    type Result = ResponseFuture<()>;
 
     fn handle(&mut self, e: RemoteEventRaw, ctx: &mut Self::Context) -> Self::Result {
         let event = match RemoteEvent::deserialize(&e.event) {
@@ -211,51 +218,36 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
                     e.sender,
                     G::route_id()
                 );
-                return;
+                return Box::pin(async move { () });
             }
         };
 
         let effect = self.state.process_remote_event(event, e.sender);
         match effect {
             game::LiveEffect::None => {}
-            game::LiveEffect::LiveRedirect(game_state) => {
-                println!("Redirecting to {:?}", game_state.type_id());
+            game::LiveEffect::LiveRedirect(route, game_state) => {
+                // When processign a LiveRedirect with a game state, we need to
+                // ask the broker to ensure it exist and init it with the game state
+                // if it doesn't.
+                debug!("LiveRedirect to {}", route);
+                let router = LiveRouteBroker::from_registry();
+                let m = RouteResolutionWithSetup(route, game_state);
+                let new_ref_req = router.send(m);
 
-                // TODO: Send the new state to the actor
-                let new_ref = if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>()
-                {
-                    println!("Redirecting to Pomp");
-                    todo!() //get_actor_reference(pomp::GameState::route_id())
-                } else if let Some(game_state) = game_state.downcast_ref::<setup::GameState>() {
-                    println!("Redirecting to Setup");
-                    todo!() //get_actor_reference(setup::GameState::route_id())
-                } else {
-                    panic!("Unknown game state type");
-                };
-
-                // for sub in self.subs.iter() {
-                //     sub.0.do_send(PerformLiveRedirect(new_ref.clone()));
-
-                //     // TODO: Send the new state to the actor
-                //     if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>() {
-                //         println!("Sending Pomp state to new actor");
-                //         sub.0.do_send(UpdateLiveState {
-                //             data: game_state.user_view(&sub.1),
-                //             route: pomp::GameState::route_id(),
-                //         });
-                //     } else if let Some(game_state) = game_state.downcast_ref::<setup::GameState>() {
-                //         sub.0.do_send(UpdateLiveState {
-                //             data: game_state.user_view(&sub.1),
-                //             route: setup::GameState::route_id(),
-                //         });
-                //     } else {
-                //         panic!("Unknown game state type");
-                //     }
-                // }
-
-                // This context is no longer needed.
+                let all_subs: Vec<_> = self.subs.keys().cloned().collect();
                 self.subs.clear();
-                ctx.stop();
+
+                return Box::pin(async move {
+                    let new_ref = new_ref_req
+                        .await
+                        .expect("Could not resolve route")
+                        .expect("Got 404 for route");
+
+                    // Redirect all subscribers to the new route
+                    for sub in all_subs {
+                        sub.do_send(PerformLiveRedirect(new_ref.clone()));
+                    }
+                });
             }
         }
 
@@ -265,6 +257,8 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
                 route: G::route_id(),
             });
         }
+
+        Box::pin(async move { () })
     }
 }
 
@@ -340,6 +334,11 @@ impl Message for RouteResolution {
     type Result = Option<BoxAddr>;
 }
 
+lazy_static! {
+    static ref POMP_ROUTE: Regex = Regex::new(r"^/pomp/(\d+)$").unwrap();
+    static ref SETUP_ROUTE: Regex = Regex::new(r"^/pomp/(\d+)/setup$").unwrap();
+}
+
 impl Handler<RouteResolution> for LiveRouteBroker {
     type Result = Option<BoxAddr>;
 
@@ -347,10 +346,6 @@ impl Handler<RouteResolution> for LiveRouteBroker {
         debug!("Resolving route {}", msg.0);
 
         // TODO: This needs to be replaced by some propper router eventually.
-        lazy_static! {
-            static ref POMP_ROUTE: Regex = Regex::new(r"^/pomp/(\d+)$").unwrap();
-            static ref SETUP_ROUTE: Regex = Regex::new(r"^/pomp/(\d+)/setup$").unwrap();
-        }
 
         // Resolve "/" to the index live actor.
         // todo. For now we just send you to /setup/1.
@@ -376,6 +371,39 @@ impl Handler<RouteResolution> for LiveRouteBroker {
         }
 
         None
+    }
+}
+
+struct RouteResolutionWithSetup(String, Box<dyn Any + Send>);
+
+impl Message for RouteResolutionWithSetup {
+    // TODO: Right now None is "not found" and "illegal setup". I should introduce
+    // a custom error type here. (With an Into<Error> impl for actix.)
+    type Result = Option<BoxAddr>;
+}
+
+impl Handler<RouteResolutionWithSetup> for LiveRouteBroker {
+    type Result = Option<BoxAddr>;
+
+    fn handle(&mut self, msg: RouteResolutionWithSetup, _ctx: &mut Self::Context) -> Self::Result {
+        debug!("Resolving route {} (with setup data)", msg.0);
+
+        if POMP_ROUTE.is_match(&msg.0) {
+            if self.pomp.is_none() {
+                info!("Spawning new pomp actor");
+                let game: pomp::GameState = *msg
+                    .1
+                    .downcast::<pomp::GameState>()
+                    .expect("Setup data is not a pomp::GameState");
+
+                let actor = SharedLiveActor::new(game);
+                let addr = actor.start();
+                self.pomp = Some(BoxAddr::Pomp(addr));
+            }
+            return self.pomp.clone();
+        }
+
+        todo!()
     }
 }
 

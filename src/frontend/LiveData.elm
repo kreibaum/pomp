@@ -197,4 +197,4 @@ encodeSetupRemoteEvent e =
             Json.Encode.object [ ( "SetReady", Json.Encode.bool ready ) ]
 
         StartGame ->
-            Json.Encode.object [ ( "StartGame", Json.Encode.null ) ]
+            Json.Encode.string "StartGame"

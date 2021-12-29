@@ -2,7 +2,7 @@ mod game;
 mod pomp;
 mod setup;
 
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -136,6 +136,7 @@ impl<T: LiveStateTrait> Handler<UpdateLiveState<T>> for WebsocketActor {
     type Result = ();
 
     fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
+        println!("Sending update to client.");
         ctx.text(serde_json::to_string(&msg).unwrap());
     }
 }
@@ -220,13 +221,15 @@ impl<G: GameStateTrait> SystemService for GameActor<G> {}
 impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
     type Result = ();
 
-    fn handle(&mut self, e: RemoteEventRaw, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, e: RemoteEventRaw, ctx: &mut Self::Context) -> Self::Result {
         let event = match RemoteEventTrait::deserialize(&e.event) {
             Ok(event) => event,
             Err(_) => {
                 println!(
-                    "Could not decode message as RemoteEvent: {} from sender {}",
-                    e.event, e.sender
+                    "Could not decode message as RemoteEvent: {} from sender {} on route {}",
+                    e.event,
+                    e.sender,
+                    G::route_id()
                 );
                 return;
             }
@@ -236,13 +239,26 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
         match effect {
             game::LiveEffect::None => {}
             game::LiveEffect::LiveRedirect(game_state) => {
-                let new_ref = get_actor_reference(&game_state);
+                println!("Redirecting to {:?}", game_state.type_id());
+
+                // TODO: Send the new state to the actor
+                let new_ref = if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>()
+                {
+                    println!("Redirecting to Pomp");
+                    get_actor_reference(pomp::GameState::route_id())
+                } else if let Some(game_state) = game_state.downcast_ref::<setup::GameState>() {
+                    println!("Redirecting to Setup");
+                    get_actor_reference(setup::GameState::route_id())
+                } else {
+                    panic!("Unknown game state type");
+                };
 
                 for sub in self.subs.iter() {
                     sub.0.do_send(PerformLiveRedirect(new_ref.clone()));
 
                     // TODO: Send the new state to the actor
                     if let Some(game_state) = game_state.downcast_ref::<pomp::GameState>() {
+                        println!("Sending Pomp state to new actor");
                         sub.0.do_send(UpdateLiveState {
                             data: game_state.restrict(&sub.1),
                             route: pomp::GameState::route_id(),
@@ -256,6 +272,10 @@ impl<G: GameStateTrait> Handler<RemoteEventRaw> for GameActor<G> {
                         panic!("Unknown game state type");
                     }
                 }
+
+                // This context is no longer needed.
+                self.subs.clear();
+                ctx.stop();
             }
         }
 

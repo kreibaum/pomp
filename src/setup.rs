@@ -34,7 +34,7 @@ pub struct LiveState {
 impl LiveStateTrait for LiveState {}
 
 /// RemoteEvent custom type. This depents on the business logic we have.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum RemoteEvent {
     SetName(String),
     SetReady(bool),
@@ -59,7 +59,8 @@ impl GameStateTrait for GameState {
                 RemoteEvent::SetName(name) => data.1.name = name,
                 RemoteEvent::SetReady(ready) => data.1.is_ready = ready,
                 RemoteEvent::StartGame => {
-                    return LiveEffect::LiveRedirect(pomp::GameState::route_id().to_owned());
+                    let game = pomp::GameState::from_setup(self);
+                    return LiveEffect::LiveRedirect(Box::new(game));
                 }
             }
         }
@@ -135,4 +136,23 @@ fn random_name() -> String {
         COLOR[rand::thread_rng().gen_range(0..COLOR.len())],
         ANIMAL[rand::thread_rng().gen_range(0..ANIMAL.len())]
     )
+}
+
+// Test module
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_random_name() {
+        assert!(random_name().len() > 0);
+    }
+
+    #[test]
+    /// Helper test to help me write elm encoders correctly.
+    fn test_encode_remote_event() {
+        let e = RemoteEvent::StartGame;
+        let s = serde_json::to_string(&e).unwrap();
+        assert_eq!("\"StartGame\"", s);
+    }
 }

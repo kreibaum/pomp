@@ -42,6 +42,7 @@ struct WebsocketActor {
     hb: Instant,
     uuid: UserUuid,
     backing_actor: BoxAddr,
+    last_send: String,
 }
 
 impl Actor for WebsocketActor {
@@ -116,10 +117,17 @@ impl<T: UserView> Handler<UpdateLiveState<T>> for WebsocketActor {
 
     fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
         trace!("Sending update to client.");
-        // TODO: Ideally we would store the last json we send and then only send
-        // the difference. That will reduce trafic. (Especially because
-        // "no change" can be ignored completely.)
-        ctx.text(serde_json::to_string(&msg).unwrap());
+
+        let text = serde_json::to_string(&msg).expect("Serde error while encoding to json.");
+        // Check if there were any changes
+        if self.last_send == text {
+            // Nothing to do, skip this update.
+            return;
+        }
+
+        // TODO: Ideally we would only send the changes to reduce trafic.
+        self.last_send = text.clone();
+        ctx.text(text);
     }
 }
 
@@ -159,6 +167,7 @@ async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<Htt
                 hb: Instant::now(),
                 uuid,
                 backing_actor: addr,
+                last_send: "".to_owned(),
             },
             &req,
             stream,

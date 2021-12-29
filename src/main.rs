@@ -13,7 +13,7 @@ use actix_web_actors::ws;
 
 use game::{RemoteEvent, SharedLiveState, UserUuid, UserView};
 use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{debug, info, trace};
 use regex::Regex;
 use serde::Serialize;
 use temp::BoxAddr;
@@ -115,7 +115,10 @@ impl<T: UserView> Handler<UpdateLiveState<T>> for WebsocketActor {
     type Result = ();
 
     fn handle(&mut self, msg: UpdateLiveState<T>, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
-        println!("Sending update to client.");
+        trace!("Sending update to client.");
+        // TODO: Ideally we would store the last json we send and then only send
+        // the difference. That will reduce trafic. (Especially because
+        // "no change" can be ignored completely.)
         ctx.text(serde_json::to_string(&msg).unwrap());
     }
 }
@@ -208,7 +211,7 @@ impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
 impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
     type Result = ResponseFuture<()>;
 
-    fn handle(&mut self, e: RemoteEventRaw, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, e: RemoteEventRaw, _ctx: &mut Self::Context) -> Self::Result {
         let event = match RemoteEvent::deserialize(&e.event) {
             Ok(event) => event,
             Err(_) => {

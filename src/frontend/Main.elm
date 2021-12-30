@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser
+import FontAwesome.Styles
 import Html exposing (Html)
 import Json.Decode
 import LiveData
@@ -34,7 +35,7 @@ main =
     Browser.element
         { init = \_ -> ( { liveState = Nothing }, Cmd.none )
         , update = update
-        , view = view
+        , view = \model -> Html.div [] [ FontAwesome.Styles.css, view model ]
         , subscriptions = \_ -> Websocket.subscribe sandboxLiveStateParser
         }
 

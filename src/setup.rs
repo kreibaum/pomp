@@ -11,6 +11,7 @@ use crate::{
 pub struct GameState {
     // This is intentionally not a HashMap, because we need an ordering.
     pub data: Vec<(UserUuid, PlayerSetupData)>,
+    is_started: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,8 +68,12 @@ impl SharedLiveState for GameState {
                 SetupEvent::SetName(name) => data.1.name = name,
                 SetupEvent::SetReady(ready) => data.1.is_ready = ready,
                 SetupEvent::StartGame => {
+                    if self.is_started {
+                        return LiveEffect::None;
+                    }
+                    self.is_started = true;
                     let game = pomp::GameState::from_setup(self);
-                    return LiveEffect::LiveRedirect("/pomp/1".to_owned(), Box::new(game));
+                    return LiveEffect::LiveRedirectInit("/pomp/1".to_owned(), Box::new(game));
                 }
             }
         }
@@ -77,6 +82,10 @@ impl SharedLiveState for GameState {
 
     /// This happens every time a connection is established.
     fn join_user(&mut self, player: UserUuid) -> LiveEffect {
+        if self.is_started {
+            return LiveEffect::LiveRedirect("/pomp/1".to_owned());
+        }
+
         // Check if this uuid is already inside.
         if self.data.iter().any(|(uuid, _)| uuid == &player) {
             return LiveEffect::None;

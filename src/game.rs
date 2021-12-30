@@ -85,7 +85,9 @@ pub trait SharedLiveState: Default + Unpin + Any + 'static {
 
 /// Encapsulate possible effects that the game implementation can trigger into
 /// the live state system.
+#[must_use]
 pub enum LiveEffect {
-    None,                                      // Equivalent to Cmd.none from Elm.
-    LiveRedirect(String, Box<dyn Any + Send>), // Not sure if "Any" can be avoided here.
+    None,                                          // Equivalent to Cmd.none from Elm.
+    LiveRedirectInit(String, Box<dyn Any + Send>), // Not sure if "Any" can be avoided here.
+    LiveRedirect(String),                          // Like LiveRedirectInit, but without setup data.
 }

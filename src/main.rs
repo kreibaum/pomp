@@ -209,7 +209,7 @@ impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
     fn started(&mut self, ctx: &mut Self::Context) {
         if let Some(duration) = self.state.tick_frequency() {
             ctx.run_interval(duration, |act, _ctx| {
-                act.state.process_tick();
+                act.state.process_tick(); // TODO: Figure out how we can handle effects here.
                 for sub in act.subs.keys() {
                     sub.do_send(UpdateLiveState {
                         data: act.state.user_view(&act.subs[sub]),
@@ -241,13 +241,32 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
         };
 
         let effect = self.state.process_remote_event(event, e.sender);
+
+        self.handle_live_effect(effect)
+    }
+}
+
+impl<G: SharedLiveState> SharedLiveActor<G> {
+    fn handle_live_effect(
+        &mut self,
+        effect: game::LiveEffect,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()>>> {
         match effect {
-            game::LiveEffect::None => {}
-            game::LiveEffect::LiveRedirect(route, game_state) => {
+            game::LiveEffect::None => {
+                for sub in self.subs.iter() {
+                    sub.0.do_send(UpdateLiveState {
+                        data: self.state.user_view(sub.1),
+                        route: G::route_id(),
+                    });
+                }
+
+                Box::pin(async move {})
+            }
+            game::LiveEffect::LiveRedirectInit(route, game_state) => {
                 // When processign a LiveRedirect with a game state, we need to
                 // ask the broker to ensure it exist and init it with the game state
                 // if it doesn't.
-                debug!("LiveRedirect to {}", route);
+                debug!("LiveRedirect to {} with setup", route);
                 let router = LiveRouteBroker::from_registry();
                 let m = RouteResolutionWithSetup(route, game_state);
                 let new_ref_req = router.send(m);
@@ -255,7 +274,7 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
                 let all_subs: Vec<_> = self.subs.keys().cloned().collect();
                 self.subs.clear();
 
-                return Box::pin(async move {
+                Box::pin(async move {
                     let new_ref = new_ref_req
                         .await
                         .expect("Could not resolve route")
@@ -265,18 +284,30 @@ impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
                     for sub in all_subs {
                         sub.do_send(PerformLiveRedirect(new_ref.clone()));
                     }
-                });
+                })
+            }
+            game::LiveEffect::LiveRedirect(route) => {
+                debug!("LiveRedirect to {} without setup", route);
+                let router = LiveRouteBroker::from_registry();
+                let m = RouteResolution(route);
+                let new_ref_req = router.send(m);
+
+                let all_subs: Vec<_> = self.subs.keys().cloned().collect();
+                self.subs.clear();
+
+                Box::pin(async move {
+                    let new_ref = new_ref_req
+                        .await
+                        .expect("Could not resolve route")
+                        .expect("Got 404 for route");
+
+                    // Redirect all subscribers to the new route
+                    for sub in all_subs {
+                        sub.do_send(PerformLiveRedirect(new_ref.clone()));
+                    }
+                })
             }
         }
-
-        for sub in self.subs.iter() {
-            sub.0.do_send(UpdateLiveState {
-                data: self.state.user_view(sub.1),
-                route: G::route_id(),
-            });
-        }
-
-        Box::pin(async move {})
     }
 }
 
@@ -288,22 +319,15 @@ impl Message for Subscribe {
 }
 
 impl<G: SharedLiveState> Handler<Subscribe> for SharedLiveActor<G> {
-    type Result = ();
+    type Result = ResponseFuture<()>;
 
     fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
         println!("New connection from {}", msg.1);
         self.subs.insert(msg.0.clone(), msg.1.clone());
-        self.state.join_user(msg.1);
+        let effect = self.state.join_user(msg.1);
         println!("Connected sockets: {}", self.subs.len());
 
-        // A new user joining usually updates the state. Sending this to all
-        // users directly.
-        for sub in self.subs.iter() {
-            sub.0.do_send(UpdateLiveState {
-                data: self.state.user_view(sub.1),
-                route: G::route_id(),
-            });
-        }
+        self.handle_live_effect(effect)
     }
 }
 

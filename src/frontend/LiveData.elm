@@ -8,32 +8,17 @@ import Json.Decode
 import Json.Encode exposing (Value)
 
 
-{-| Overall live state. Required for now until I figure out better typing.
--}
-type LiveState
-    = PompLiveStateWrapper PompLiveState
-    | SetupLiveStateWrapper SetupLiveState
-
-
-{-| Overall parser that looks at the "route" element first to decide which type
-to decode into and then decodes the "data" accordingly.
--}
-decodeLiveState : Json.Decode.Decoder LiveState
-decodeLiveState =
+decodeLiveStateOneRouteOnly : String -> Json.Decode.Decoder page -> (page -> wrapped) -> Json.Decode.Decoder wrapped
+decodeLiveStateOneRouteOnly routeId decoder wrapper =
     Json.Decode.at [ "route" ] Json.Decode.string
         |> Json.Decode.andThen
             (\x ->
-                case x of
-                    "pomp" ->
-                        Json.Decode.at [ "data" ] decodePompLiveState
-                            |> Json.Decode.map PompLiveStateWrapper
+                if x == routeId then
+                    Json.Decode.at [ "data" ] decoder
+                        |> Json.Decode.map wrapper
 
-                    "setup" ->
-                        Json.Decode.at [ "data" ] decodeSetupLiveState
-                            |> Json.Decode.map SetupLiveStateWrapper
-
-                    _ ->
-                        Json.Decode.fail "Unknown route"
+                else
+                    Json.Decode.fail ("Not annotated as 'route':" ++ routeId)
             )
 
 

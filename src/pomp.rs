@@ -1,7 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+//! Contains only core game logic for the Pomp game.
+//!
+use std::{collections::HashMap, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,16 +9,19 @@ use crate::{
     setup,
 };
 
-/// Contains only core game logic for the Pomp game.
-/// But since "what can a player see" is game logic, the LiveState type is also
-/// defined in this module. (At least until we put any additional data into it
-/// that is not game logic.)
-
+/// How many ticks the game progresses before a player gets energy.
 const TICKS_PER_ENERGY: u8 = 10;
 
 /// Shared state for one player
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct PompPlayerView {
+    my_inventory: PlayerInventoryView,
+    others: Vec<PlayerInventoryView>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+struct PlayerInventoryView {
+    name: String,
     energy: u32,
     fire: u32,
     plant: u32,
@@ -28,17 +30,31 @@ pub struct PompPlayerView {
     chaos: u32,
 }
 
+impl PlayerInventoryView {
+    fn public_info(inv: &PlayerData) -> Self {
+        Self {
+            name: inv.name.clone(),
+            energy: inv.energy,
+            fire: inv.fire,
+            plant: inv.plant,
+            water: inv.water,
+            earth: inv.earth,
+            chaos: inv.chaos,
+        }
+    }
+}
+
 impl UserView for PompPlayerView {}
 
 /// Total state of the whole game.
 #[derive(Debug, Default)]
 pub struct GameState {
-    players: HashSet<UserUuid>,
-    inventories: HashMap<UserUuid, PlayerInventory>,
+    players: HashMap<UserUuid, PlayerData>,
 }
 
-#[derive(Debug, Default)]
-struct PlayerInventory {
+#[derive(Debug)]
+struct PlayerData {
+    name: String,
     enery_fraction_ticks: u8,
     energy: u32,
     fire: u32,
@@ -48,17 +64,29 @@ struct PlayerInventory {
     chaos: u32,
 }
 
+impl PlayerData {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            enery_fraction_ticks: 0,
+            energy: 0,
+            fire: 0,
+            plant: 0,
+            water: 0,
+            earth: 0,
+            chaos: 0,
+        }
+    }
+}
+
 impl GameState {
     pub fn from_setup(setup_data: &setup::GameState) -> Self {
-        let mut players = HashSet::new();
         let mut inventories = HashMap::new();
-        for (uuid, _setup_data) in &setup_data.data {
-            players.insert(uuid.clone());
-            inventories.insert(uuid.clone(), PlayerInventory::default());
+        for (uuid, setup_data) in &setup_data.data {
+            inventories.insert(uuid.clone(), PlayerData::new(setup_data.name.clone()));
         }
         GameState {
-            players,
-            inventories,
+            players: inventories,
         }
     }
 }
@@ -90,17 +118,33 @@ impl SharedLiveState for GameState {
 
     /// Extract information that is relevant for one player and hide the rest.
     fn user_view(&self, player: &UserUuid) -> PompPlayerView {
-        let inventory = self
-            .inventories
+        // My inventory
+        let my_data = self
+            .players
             .get(player)
             .expect("Player inventory not found");
+
+        let my_inventory = PlayerInventoryView {
+            name: my_data.name.clone(),
+            energy: my_data.energy,
+            fire: my_data.fire,
+            plant: my_data.plant,
+            water: my_data.water,
+            earth: my_data.earth,
+            chaos: my_data.chaos,
+        };
+
+        let mut others = Vec::with_capacity(self.players.len() - 1);
+
+        for (uuid, data) in self.players.iter() {
+            if uuid != player {
+                others.push(PlayerInventoryView::public_info(data));
+            }
+        }
+
         PompPlayerView {
-            energy: inventory.energy,
-            fire: inventory.fire,
-            plant: inventory.plant,
-            water: inventory.water,
-            earth: inventory.earth,
-            chaos: inventory.chaos,
+            my_inventory,
+            others,
         }
     }
 
@@ -108,7 +152,7 @@ impl SharedLiveState for GameState {
     fn process_remote_event(&mut self, event: PompEvent, sender: UserUuid) -> LiveEffect {
         match event {
             PompEvent::Buy(color) => {
-                let inventory = self.inventories.get_mut(&sender).unwrap();
+                let inventory = self.players.get_mut(&sender).unwrap();
                 inventory.buy(color);
             }
         }
@@ -122,11 +166,7 @@ impl SharedLiveState for GameState {
 
     /// Processes a game logic tick.
     fn process_tick(&mut self) -> LiveEffect {
-        for player in self.players.iter() {
-            let inventory = self
-                .inventories
-                .get_mut(player)
-                .expect("Player inventory not found");
+        for (_player, inventory) in self.players.iter_mut() {
             inventory.enery_fraction_ticks += 1;
             if inventory.enery_fraction_ticks >= TICKS_PER_ENERGY {
                 inventory.enery_fraction_ticks = 0;
@@ -137,11 +177,9 @@ impl SharedLiveState for GameState {
     }
 
     /// Adds a player to the game.
-    fn join_user(&mut self, player: UserUuid) -> LiveEffect {
-        if !self.players.contains(&player) {
-            self.players.insert(player.clone());
-            self.inventories.insert(player, PlayerInventory::default());
-        }
+    fn join_user(&mut self, _player: UserUuid) -> LiveEffect {
+        // Players can't join the game. This only happens in setup.
+        // They turn into spectators. (TODO: Implement spectators)
         LiveEffect::None
     }
 
@@ -150,7 +188,7 @@ impl SharedLiveState for GameState {
     }
 }
 
-impl PlayerInventory {
+impl PlayerData {
     fn buy(&mut self, color: ElementColor) {
         if self.energy >= 1 {
             self.energy -= 1;

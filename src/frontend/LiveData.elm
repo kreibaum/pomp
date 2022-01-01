@@ -40,26 +40,107 @@ encodeRemoteEvent e =
             encodeSetupRemoteEvent x
 
 
-{-| Elm version of
 
-    struct LiveState {
-        energy: u32,
-        fire: u32,
-        plant: u32,
-        water: u32,
-        earth: u32,
-        chaos: u32,
+-- Pomp Live State -------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+
+type alias PompLiveState =
+    { myInventory : PompMyInventory
+    , others : List PompOthersInventory
     }
 
--}
-type alias PompLiveState =
-    { energy : Int
+
+type alias PompMyInventory =
+    { chaos : Int
+    , earth : Int
+    , energy : Int
     , fire : Int
+    , name : String
     , plant : Int
     , water : Int
-    , earth : Int
-    , chaos : Int
     }
+
+
+type alias PompOthersInventory =
+    { chaos : Int
+    , earth : Int
+    , energy : Int
+    , fire : Int
+    , name : String
+    , plant : Int
+    , water : Int
+    }
+
+
+decodePompLiveState : Json.Decode.Decoder PompLiveState
+decodePompLiveState =
+    Json.Decode.map2 PompLiveState
+        (Json.Decode.field "my_inventory" decodeRootMyInventory)
+        (Json.Decode.field "others" <| Json.Decode.list decodeRootOthersObject)
+
+
+decodeRootMyInventory : Json.Decode.Decoder PompMyInventory
+decodeRootMyInventory =
+    Json.Decode.map7 PompMyInventory
+        (Json.Decode.field "chaos" Json.Decode.int)
+        (Json.Decode.field "earth" Json.Decode.int)
+        (Json.Decode.field "energy" Json.Decode.int)
+        (Json.Decode.field "fire" Json.Decode.int)
+        (Json.Decode.field "name" Json.Decode.string)
+        (Json.Decode.field "plant" Json.Decode.int)
+        (Json.Decode.field "water" Json.Decode.int)
+
+
+decodeRootOthersObject : Json.Decode.Decoder PompOthersInventory
+decodeRootOthersObject =
+    Json.Decode.map7 PompOthersInventory
+        (Json.Decode.field "chaos" Json.Decode.int)
+        (Json.Decode.field "earth" Json.Decode.int)
+        (Json.Decode.field "energy" Json.Decode.int)
+        (Json.Decode.field "fire" Json.Decode.int)
+        (Json.Decode.field "name" Json.Decode.string)
+        (Json.Decode.field "plant" Json.Decode.int)
+        (Json.Decode.field "water" Json.Decode.int)
+
+
+encodeRoot : PompLiveState -> Json.Encode.Value
+encodeRoot root =
+    Json.Encode.object
+        [ ( "my_inventory", encodeRootMyInventory root.myInventory )
+        , ( "others", Json.Encode.list encodeRootOthersObject root.others )
+        ]
+
+
+encodeRootMyInventory : PompMyInventory -> Json.Encode.Value
+encodeRootMyInventory rootMyInventory =
+    Json.Encode.object
+        [ ( "chaos", Json.Encode.int rootMyInventory.chaos )
+        , ( "earth", Json.Encode.int rootMyInventory.earth )
+        , ( "energy", Json.Encode.int rootMyInventory.energy )
+        , ( "fire", Json.Encode.int rootMyInventory.fire )
+        , ( "name", Json.Encode.string rootMyInventory.name )
+        , ( "plant", Json.Encode.int rootMyInventory.plant )
+        , ( "water", Json.Encode.int rootMyInventory.water )
+        ]
+
+
+encodeRootOthersObject : PompOthersInventory -> Json.Encode.Value
+encodeRootOthersObject rootOthersObject =
+    Json.Encode.object
+        [ ( "chaos", Json.Encode.int rootOthersObject.chaos )
+        , ( "earth", Json.Encode.int rootOthersObject.earth )
+        , ( "energy", Json.Encode.int rootOthersObject.energy )
+        , ( "fire", Json.Encode.int rootOthersObject.fire )
+        , ( "name", Json.Encode.string rootOthersObject.name )
+        , ( "plant", Json.Encode.int rootOthersObject.plant )
+        , ( "water", Json.Encode.int rootOthersObject.water )
+        ]
+
+
+
+-- Pomp Remote Event -----------------------------------------------------------
+--------------------------------------------------------------------------------
 
 
 type ElementColor
@@ -105,17 +186,6 @@ encodeElementColor e =
 
         Chaos ->
             Json.Encode.string "Chaos"
-
-
-decodePompLiveState : Json.Decode.Decoder PompLiveState
-decodePompLiveState =
-    Json.Decode.map6 PompLiveState
-        (Json.Decode.at [ "energy" ] Json.Decode.int)
-        (Json.Decode.at [ "fire" ] Json.Decode.int)
-        (Json.Decode.at [ "plant" ] Json.Decode.int)
-        (Json.Decode.at [ "water" ] Json.Decode.int)
-        (Json.Decode.at [ "earth" ] Json.Decode.int)
-        (Json.Decode.at [ "chaos" ] Json.Decode.int)
 
 
 {-| Elm version of

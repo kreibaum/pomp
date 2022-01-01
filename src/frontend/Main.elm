@@ -4,7 +4,6 @@ import Browser
 import FontAwesome.Styles
 import Html exposing (Html)
 import Json.Decode
-import Json.Encode
 import LiveData
 import Page.Loading
 import Page.Pomp

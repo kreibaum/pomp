@@ -17,7 +17,7 @@ pub struct GameState {
 #[derive(Debug, Clone, Serialize)]
 pub struct PlayerSetupData {
     is_ready: bool,
-    name: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

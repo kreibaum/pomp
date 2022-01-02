@@ -10,7 +10,7 @@ view : PompLiveState -> Html PompRemoteEvent
 view model =
     div []
         [ viewMyInventory model.myInventory
-        , viewMarketplace
+        , viewMarketplace model.market
         , viewOthers model.others
         ]
 
@@ -43,32 +43,28 @@ viewMyInventory inventory =
         ]
 
 
-viewMarketplace : Html a
-viewMarketplace =
+viewMarketplace : List (Maybe Card) -> Html a
+viewMarketplace cards =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2 sm:space-y-1" ]
         [ div [ class "font-bold text-center" ] [ text "Marketplace" ]
-        , div [ class "flex flex-row sm:space-x-1" ]
-            [ div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Lorem" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Ipsum" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Dolor" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "sit" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "amet" ]
-            ]
-        , div [ class "flex flex-row sm:space-x-1" ]
-            [ div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Lorem" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Ipsum" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Dolor" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "sit" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "amet" ]
-            ]
-        , div [ class "flex flex-row sm:space-x-1" ]
-            [ div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Lorem" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Ipsum" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "Dolor" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "sit" ]
-            , div [ class "basis-1/5 text-center p-1 border-gray-300 border-2" ] [ text "amet" ]
-            ]
+        , div [ class "grid sm:gap-1 grid-cols-5 grid-rows-3" ]
+            (List.map viewMaybeCard cards)
         ]
+
+
+viewMaybeCard : Maybe Card -> Html a
+viewMaybeCard maybeCard =
+    case maybeCard of
+        Just card ->
+            viewCard card
+
+        Nothing ->
+            div [ class "text-center p-1 sm:p-2 border-gray-300 border-2" ] [ text "Sold" ]
+
+
+viewCard : Card -> Html a
+viewCard card =
+    div [ class "text-center p-1 sm:p-2 border-gray-300 border-2" ] [ text card.color ]
 
 
 viewOthers : List PompOthersInventory -> Html a

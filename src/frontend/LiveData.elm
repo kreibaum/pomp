@@ -48,6 +48,19 @@ encodeRemoteEvent e =
 type alias PompLiveState =
     { myInventory : PompMyInventory
     , others : List PompOthersInventory
+    , market : List (Maybe Card)
+    }
+
+
+type alias Card =
+    { id : Int
+    , color : String
+    , points : Int
+    , fireCost : Int
+    , plantCost : Int
+    , waterCost : Int
+    , earthCost : Int
+    , chaosCost : Int
     }
 
 
@@ -75,9 +88,23 @@ type alias PompOthersInventory =
 
 decodePompLiveState : Json.Decode.Decoder PompLiveState
 decodePompLiveState =
-    Json.Decode.map2 PompLiveState
+    Json.Decode.map3 PompLiveState
         (Json.Decode.field "my_inventory" decodeRootMyInventory)
         (Json.Decode.field "others" <| Json.Decode.list decodeRootOthersObject)
+        (Json.Decode.field "market" <| Json.Decode.list (Json.Decode.maybe decodeCardObject))
+
+
+decodeCardObject : Json.Decode.Decoder Card
+decodeCardObject =
+    Json.Decode.map8 Card
+        (Json.Decode.field "id" Json.Decode.int)
+        (Json.Decode.field "color" Json.Decode.string)
+        (Json.Decode.field "points" Json.Decode.int)
+        (Json.Decode.field "fire_cost" Json.Decode.int)
+        (Json.Decode.field "plant_cost" Json.Decode.int)
+        (Json.Decode.field "water_cost" Json.Decode.int)
+        (Json.Decode.field "earth_cost" Json.Decode.int)
+        (Json.Decode.field "chaos_cost" Json.Decode.int)
 
 
 decodeRootMyInventory : Json.Decode.Decoder PompMyInventory

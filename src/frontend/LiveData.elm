@@ -81,15 +81,19 @@ type alias Card =
 
 type alias PompMyInventory =
     { name : String
+    , points : Int
     , energy : Int
     , elements : ElementVector
+    , discount : ElementVector
     }
 
 
 type alias PompOthersInventory =
     { name : String
+    , points : Int
     , energy : Int
     , elements : ElementVector
+    , discount : ElementVector
     }
 
 
@@ -112,18 +116,22 @@ decodeCardObject =
 
 decodeRootMyInventory : Json.Decode.Decoder PompMyInventory
 decodeRootMyInventory =
-    Json.Decode.map3 PompMyInventory
+    Json.Decode.map5 PompMyInventory
         (Json.Decode.field "name" Json.Decode.string)
+        (Json.Decode.field "points" <| Json.Decode.int)
         (Json.Decode.field "energy" Json.Decode.int)
         (Json.Decode.field "elements" decodeElementVector)
+        (Json.Decode.field "discount" decodeElementVector)
 
 
 decodeRootOthersObject : Json.Decode.Decoder PompOthersInventory
 decodeRootOthersObject =
-    Json.Decode.map3 PompOthersInventory
+    Json.Decode.map5 PompOthersInventory
         (Json.Decode.field "name" Json.Decode.string)
+        (Json.Decode.field "points" <| Json.Decode.int)
         (Json.Decode.field "energy" Json.Decode.int)
         (Json.Decode.field "elements" decodeElementVector)
+        (Json.Decode.field "discount" decodeElementVector)
 
 
 

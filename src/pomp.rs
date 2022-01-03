@@ -24,8 +24,10 @@ pub struct PompPlayerView {
 #[derive(Debug, Default, Clone, Serialize)]
 struct PlayerInventoryView {
     name: String,
+    points: u32,
     energy: u32,
     elements: ElementVector,
+    discount: ElementVector,
 }
 
 /// There are a lot of places where we need one number for each element.
@@ -41,7 +43,7 @@ struct ElementVector {
 
 impl ElementVector {
     /// Increase value for the given element by the given amount.
-    fn add_element(&mut self, element: ElementColor, value: u32) {
+    fn add_element_ip(&mut self, element: ElementColor, value: u32) {
         match element {
             ElementColor::Fire => self.fire += value,
             ElementColor::Plant => self.plant += value,
@@ -68,7 +70,7 @@ impl ElementVector {
 
     /// Substracts a smaller vector from this vector.
     /// Only call this when you already know that this >= other.
-    fn minus(&mut self, subtrahend: &Self) {
+    fn minus_ip(&mut self, subtrahend: &Self) {
         assert!(self.geq(subtrahend));
         self.fire -= subtrahend.fire;
         self.plant -= subtrahend.plant;
@@ -79,12 +81,25 @@ impl ElementVector {
 
     /// Version of minus where it is assumed that we may go into negative numbers
     /// and those are converted to 0. Useful for discounts.
-    fn restricted_minus(&mut self, subtrahend: &Self) {
-        self.fire = self.fire.saturating_sub(subtrahend.fire);
-        self.plant = self.plant.saturating_sub(subtrahend.plant);
-        self.water = self.water.saturating_sub(subtrahend.water);
-        self.earth = self.earth.saturating_sub(subtrahend.earth);
-        self.chaos = self.chaos.saturating_sub(subtrahend.chaos);
+    fn restricted_minus(minuend: &Self, subtrahend: &Self) -> Self {
+        Self {
+            fire: minuend.fire.saturating_sub(subtrahend.fire),
+            plant: minuend.plant.saturating_sub(subtrahend.plant),
+            water: minuend.water.saturating_sub(subtrahend.water),
+            earth: minuend.earth.saturating_sub(subtrahend.earth),
+            chaos: minuend.chaos.saturating_sub(subtrahend.chaos),
+        }
+    }
+
+    // Return the pointwise sum of the two vectors.
+    fn sum(vector1: &ElementVector, vector2: &ElementVector) -> ElementVector {
+        ElementVector {
+            fire: vector1.fire + vector2.fire,
+            plant: vector1.plant + vector2.plant,
+            water: vector1.water + vector2.water,
+            earth: vector1.earth + vector2.earth,
+            chaos: vector1.chaos + vector2.chaos,
+        }
     }
 }
 
@@ -92,8 +107,10 @@ impl PlayerInventoryView {
     fn public_info(inv: &PlayerData) -> PlayerInventoryView {
         PlayerInventoryView {
             name: inv.name.clone(),
+            points: inv.points,
             energy: inv.energy,
             elements: inv.elements.clone(),
+            discount: inv.discount.clone(),
         }
     }
 }
@@ -115,7 +132,9 @@ struct PlayerData {
     name: String,
     enery_fraction_ticks: u8,
     energy: u32,
+    points: u32,
     elements: ElementVector,
+    discount: ElementVector,
 }
 
 impl PlayerData {
@@ -124,7 +143,9 @@ impl PlayerData {
             name,
             enery_fraction_ticks: 0,
             energy: 0,
+            points: 0,
             elements: ElementVector::default(),
+            discount: ElementVector::default(),
         }
     }
 }
@@ -227,14 +248,17 @@ impl SharedLiveState for GameState {
                 let mut market_index = 999;
                 for (i, c) in self.market.iter().enumerate() {
                     if let Some(c) = c {
-                        // TODO: Discount
-                        if c.id == id && inventory.elements.geq(&c.cost) {
+                        if c.id == id
+                            && ElementVector::sum(&inventory.elements, &inventory.discount)
+                                .geq(&c.cost)
+                        {
                             market_index = i;
                             break;
                         }
                     }
                 }
                 if market_index == 999 {
+                    // This card is not on the market or not affordable.
                     return LiveEffect::None;
                 }
                 let mut new_card = if market_index < 5 {
@@ -246,8 +270,14 @@ impl SharedLiveState for GameState {
                 };
                 mem::swap(&mut self.market[market_index], &mut new_card);
                 let new_card = new_card.unwrap();
-                inventory.elements.minus(&new_card.cost);
-                // TODO: Discount
+                inventory
+                    .elements
+                    .minus_ip(&ElementVector::restricted_minus(
+                        &new_card.cost,
+                        &inventory.discount,
+                    ));
+                inventory.discount.add_element_ip(new_card.color, 1);
+                inventory.points += new_card.points;
             }
         }
         LiveEffect::None
@@ -286,7 +316,7 @@ impl PlayerData {
     fn buy(&mut self, color: ElementColor) {
         if self.energy >= 1 {
             self.energy -= 1;
-            self.elements.add_element(color, 1);
+            self.elements.add_element_ip(color, 1);
         }
     }
 }
@@ -295,7 +325,7 @@ impl PlayerData {
 struct Card {
     id: usize, // We need to tag the card to make it buyable.
     color: ElementColor,
-    points: usize,
+    points: u32,
     cost: ElementVector,
 }
 
@@ -392,7 +422,7 @@ impl Card {
     /// Randomly distributes a fixed cost across the card.
     /// The color of the card is also random.
     /// The victory points are given
-    fn fixed_cost_card(id: usize, points: usize, cost: usize) -> Card {
+    fn fixed_cost_card(id: usize, points: u32, cost: usize) -> Card {
         let mut card = Card {
             id,
             color: rand::random(),
@@ -410,7 +440,7 @@ impl Card {
 
     fn random_inc(&mut self) {
         let color: ElementColor = rand::random();
-        self.cost.add_element(color, 1);
+        self.cost.add_element_ip(color, 1);
     }
 }
 

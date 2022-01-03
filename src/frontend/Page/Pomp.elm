@@ -19,25 +19,25 @@ viewMyInventory : PompMyInventory -> Html PompRemoteEvent
 viewMyInventory inventory =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2" ]
         [ div [ class "flex flex-row sm:space-x-1" ]
-            [ div [ class "basis-1/4 text-center p-1" ] [ text "0 Points" ]
+            [ div [ class "basis-1/4 text-center p-1" ] [ text (String.fromInt inventory.points ++ " Points") ]
             , div [ class "basis-2/4 text-center p-1 font-bold" ] [ text inventory.name ]
             , div [ class "basis-1/4 text-center p-1" ] [ text (String.fromInt inventory.energy ++ " Energy") ]
             ]
         , div [ class "flex flex-row sm:space-x-1" ]
             [ button [ onClick (Buy Fire), class "basis-1/5 text-center p-1 bg-red-200 hover:bg-red-300 active:bg-red-400 border-red-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.elements.fire ++ ") Fire")
+                [ text (String.fromInt inventory.elements.fire ++ " (+" ++ String.fromInt inventory.discount.fire ++ ") Fire")
                 ]
             , button [ onClick (Buy Plant), class "basis-1/5 text-center p-1 bg-green-200 hover:bg-green-300 active:bg-green-400 border-green-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.elements.plant ++ ") Plant")
+                [ text (String.fromInt inventory.elements.plant ++ " (+" ++ String.fromInt inventory.discount.plant ++ ") Plant")
                 ]
             , button [ onClick (Buy Water), class "basis-1/5 text-center p-1 bg-blue-200 hover:bg-blue-300 active:bg-blue-400 border-blue-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.elements.water ++ ") Water")
+                [ text (String.fromInt inventory.elements.water ++ " (+" ++ String.fromInt inventory.discount.water ++ ") Water")
                 ]
             , button [ onClick (Buy Earth), class "basis-1/5 text-center p-1 bg-amber-200 hover:bg-amber-300 active:bg-amber-400 border-amber-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.elements.earth ++ ") Earth")
+                [ text (String.fromInt inventory.elements.earth ++ " (+" ++ String.fromInt inventory.discount.earth ++ ") Earth")
                 ]
             , button [ onClick (Buy Chaos), class "basis-1/5 text-center p-1 bg-purple-200 hover:bg-purple-300 active:bg-purple-400 border-purple-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.elements.chaos ++ ") Chaos")
+                [ text (String.fromInt inventory.elements.chaos ++ " (+" ++ String.fromInt inventory.discount.chaos ++ ") Chaos")
                 ]
             ]
         ]
@@ -97,7 +97,7 @@ viewCardCost card =
                 ]
 
         costDivList =
-            List.map (\t -> div [] [ text t ]) cost
+            List.map (\t -> div [ class "text-left" ] [ text t ]) cost
 
         -- &nbsp; is a non-breaking space
         noBreakSpace =
@@ -119,25 +119,25 @@ viewOther : PompOthersInventory -> Html a
 viewOther other =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2" ]
         [ div [ class "flex flex-row sm:space-x-1" ]
-            [ div [ class "basis-1/4 text-center p-1" ] [ text "0 Points" ]
+            [ div [ class "basis-1/4 text-center p-1" ] [ text (String.fromInt other.points ++ " Points") ]
             , div [ class "basis-2/4 text-center p-1 font-bold" ] [ text other.name ]
             , div [ class "basis-1/4 text-center p-1" ] [ text (String.fromInt other.energy ++ " Energy") ]
             ]
         , div [ class "flex flex-row sm:space-x-1" ]
             [ div [ class "basis-1/5 text-center p-1 bg-red-200 border-red-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.elements.fire ++ ") Fire")
+                [ text (String.fromInt other.elements.fire ++ " (+" ++ String.fromInt other.discount.fire ++ ") Fire")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-green-200 border-green-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.elements.plant ++ ") Plant")
+                [ text (String.fromInt other.elements.plant ++ " (+" ++ String.fromInt other.discount.plant ++ ") Plant")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-blue-200 border-blue-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.elements.water ++ ") Water")
+                [ text (String.fromInt other.elements.water ++ " (+" ++ String.fromInt other.discount.water ++ ") Water")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-amber-200 border-amber-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.elements.earth ++ ") Earth")
+                [ text (String.fromInt other.elements.earth ++ " (+" ++ String.fromInt other.discount.earth ++ ") Earth")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-purple-200 border-purple-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.elements.chaos ++ ") Chaos")
+                [ text (String.fromInt other.elements.chaos ++ " (+" ++ String.fromInt other.discount.chaos ++ ") Chaos")
                 ]
             ]
         ]

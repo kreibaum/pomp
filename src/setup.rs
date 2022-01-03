@@ -111,7 +111,30 @@ impl SharedLiveState for GameState {
 fn random_name() -> String {
     use rand::Rng;
 
-    const SENTIMENT: [&str; 6] = ["Happy", "Sad", "Angry", "Excited", "Bored", "Lonely"];
+    // Positive adjectives
+    const ADJECTIVE: [&str; 21] = [
+        "Active",
+        "Busy",
+        "Creative",
+        "Daring",
+        "Excited",
+        "Focused",
+        "Gentle",
+        "Happy",
+        "Kind",
+        "Lovely",
+        "Marvelous",
+        "Nervous",
+        "Opinionated",
+        "Passionate",
+        "Proud",
+        "Relaxed",
+        "Sincere",
+        "Sneaky",
+        "Tender",
+        "Unique",
+        "Victorious",
+    ];
     const COLOR: [&str; 6] = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange"];
     const ANIMAL: [&str; 11] = [
         "Bumblebee",
@@ -129,7 +152,7 @@ fn random_name() -> String {
     // Combine a random sentiment, color and animal into a single name.
     format!(
         "{} {} {}",
-        SENTIMENT[rand::thread_rng().gen_range(0..SENTIMENT.len())],
+        ADJECTIVE[rand::thread_rng().gen_range(0..ADJECTIVE.len())],
         COLOR[rand::thread_rng().gen_range(0..COLOR.len())],
         ANIMAL[rand::thread_rng().gen_range(0..ANIMAL.len())]
     )

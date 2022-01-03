@@ -52,37 +52,44 @@ type alias PompLiveState =
     }
 
 
+type alias ElementVector =
+    { chaos : Int
+    , earth : Int
+    , fire : Int
+    , plant : Int
+    , water : Int
+    }
+
+
+decodeElementVector : Json.Decode.Decoder ElementVector
+decodeElementVector =
+    Json.Decode.map5 ElementVector
+        (Json.Decode.field "chaos" Json.Decode.int)
+        (Json.Decode.field "earth" Json.Decode.int)
+        (Json.Decode.field "fire" Json.Decode.int)
+        (Json.Decode.field "plant" Json.Decode.int)
+        (Json.Decode.field "water" Json.Decode.int)
+
+
 type alias Card =
     { id : Int
     , color : String
     , points : Int
-    , fireCost : Int
-    , plantCost : Int
-    , waterCost : Int
-    , earthCost : Int
-    , chaosCost : Int
+    , cost : ElementVector
     }
 
 
 type alias PompMyInventory =
-    { chaos : Int
-    , earth : Int
+    { name : String
     , energy : Int
-    , fire : Int
-    , name : String
-    , plant : Int
-    , water : Int
+    , elements : ElementVector
     }
 
 
 type alias PompOthersInventory =
-    { chaos : Int
-    , earth : Int
+    { name : String
     , energy : Int
-    , fire : Int
-    , name : String
-    , plant : Int
-    , water : Int
+    , elements : ElementVector
     }
 
 
@@ -96,73 +103,27 @@ decodePompLiveState =
 
 decodeCardObject : Json.Decode.Decoder Card
 decodeCardObject =
-    Json.Decode.map8 Card
+    Json.Decode.map4 Card
         (Json.Decode.field "id" Json.Decode.int)
         (Json.Decode.field "color" Json.Decode.string)
         (Json.Decode.field "points" Json.Decode.int)
-        (Json.Decode.field "fire_cost" Json.Decode.int)
-        (Json.Decode.field "plant_cost" Json.Decode.int)
-        (Json.Decode.field "water_cost" Json.Decode.int)
-        (Json.Decode.field "earth_cost" Json.Decode.int)
-        (Json.Decode.field "chaos_cost" Json.Decode.int)
+        (Json.Decode.field "cost" decodeElementVector)
 
 
 decodeRootMyInventory : Json.Decode.Decoder PompMyInventory
 decodeRootMyInventory =
-    Json.Decode.map7 PompMyInventory
-        (Json.Decode.field "chaos" Json.Decode.int)
-        (Json.Decode.field "earth" Json.Decode.int)
-        (Json.Decode.field "energy" Json.Decode.int)
-        (Json.Decode.field "fire" Json.Decode.int)
+    Json.Decode.map3 PompMyInventory
         (Json.Decode.field "name" Json.Decode.string)
-        (Json.Decode.field "plant" Json.Decode.int)
-        (Json.Decode.field "water" Json.Decode.int)
+        (Json.Decode.field "energy" Json.Decode.int)
+        (Json.Decode.field "elements" decodeElementVector)
 
 
 decodeRootOthersObject : Json.Decode.Decoder PompOthersInventory
 decodeRootOthersObject =
-    Json.Decode.map7 PompOthersInventory
-        (Json.Decode.field "chaos" Json.Decode.int)
-        (Json.Decode.field "earth" Json.Decode.int)
-        (Json.Decode.field "energy" Json.Decode.int)
-        (Json.Decode.field "fire" Json.Decode.int)
+    Json.Decode.map3 PompOthersInventory
         (Json.Decode.field "name" Json.Decode.string)
-        (Json.Decode.field "plant" Json.Decode.int)
-        (Json.Decode.field "water" Json.Decode.int)
-
-
-encodeRoot : PompLiveState -> Json.Encode.Value
-encodeRoot root =
-    Json.Encode.object
-        [ ( "my_inventory", encodeRootMyInventory root.myInventory )
-        , ( "others", Json.Encode.list encodeRootOthersObject root.others )
-        ]
-
-
-encodeRootMyInventory : PompMyInventory -> Json.Encode.Value
-encodeRootMyInventory rootMyInventory =
-    Json.Encode.object
-        [ ( "chaos", Json.Encode.int rootMyInventory.chaos )
-        , ( "earth", Json.Encode.int rootMyInventory.earth )
-        , ( "energy", Json.Encode.int rootMyInventory.energy )
-        , ( "fire", Json.Encode.int rootMyInventory.fire )
-        , ( "name", Json.Encode.string rootMyInventory.name )
-        , ( "plant", Json.Encode.int rootMyInventory.plant )
-        , ( "water", Json.Encode.int rootMyInventory.water )
-        ]
-
-
-encodeRootOthersObject : PompOthersInventory -> Json.Encode.Value
-encodeRootOthersObject rootOthersObject =
-    Json.Encode.object
-        [ ( "chaos", Json.Encode.int rootOthersObject.chaos )
-        , ( "earth", Json.Encode.int rootOthersObject.earth )
-        , ( "energy", Json.Encode.int rootOthersObject.energy )
-        , ( "fire", Json.Encode.int rootOthersObject.fire )
-        , ( "name", Json.Encode.string rootOthersObject.name )
-        , ( "plant", Json.Encode.int rootOthersObject.plant )
-        , ( "water", Json.Encode.int rootOthersObject.water )
-        ]
+        (Json.Decode.field "energy" Json.Decode.int)
+        (Json.Decode.field "elements" decodeElementVector)
 
 
 

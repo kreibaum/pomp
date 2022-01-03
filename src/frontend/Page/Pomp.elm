@@ -25,19 +25,19 @@ viewMyInventory inventory =
             ]
         , div [ class "flex flex-row sm:space-x-1" ]
             [ button [ onClick (Buy Fire), class "basis-1/5 text-center p-1 bg-red-200 hover:bg-red-300 active:bg-red-400 border-red-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.fire ++ ") Fire")
+                [ text ("0 (+" ++ String.fromInt inventory.elements.fire ++ ") Fire")
                 ]
             , button [ onClick (Buy Plant), class "basis-1/5 text-center p-1 bg-green-200 hover:bg-green-300 active:bg-green-400 border-green-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.plant ++ ") Plant")
+                [ text ("0 (+" ++ String.fromInt inventory.elements.plant ++ ") Plant")
                 ]
             , button [ onClick (Buy Water), class "basis-1/5 text-center p-1 bg-blue-200 hover:bg-blue-300 active:bg-blue-400 border-blue-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.water ++ ") Water")
+                [ text ("0 (+" ++ String.fromInt inventory.elements.water ++ ") Water")
                 ]
             , button [ onClick (Buy Earth), class "basis-1/5 text-center p-1 bg-amber-200 hover:bg-amber-300 active:bg-amber-400 border-amber-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.earth ++ ") Earth")
+                [ text ("0 (+" ++ String.fromInt inventory.elements.earth ++ ") Earth")
                 ]
             , button [ onClick (Buy Chaos), class "basis-1/5 text-center p-1 bg-purple-200 hover:bg-purple-300 active:bg-purple-400 border-purple-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt inventory.chaos ++ ") Chaos")
+                [ text ("0 (+" ++ String.fromInt inventory.elements.chaos ++ ") Chaos")
                 ]
             ]
         ]
@@ -89,11 +89,11 @@ viewCardCost card =
 
         cost =
             List.concat
-                [ s "Fire" card.fireCost
-                , s "Plant" card.plantCost
-                , s "Water" card.waterCost
-                , s "Earth" card.earthCost
-                , s "Chaos" card.chaosCost
+                [ s "Fire" card.cost.fire
+                , s "Plant" card.cost.plant
+                , s "Water" card.cost.water
+                , s "Earth" card.cost.earth
+                , s "Chaos" card.cost.chaos
                 ]
 
         costDivList =
@@ -125,19 +125,19 @@ viewOther other =
             ]
         , div [ class "flex flex-row sm:space-x-1" ]
             [ div [ class "basis-1/5 text-center p-1 bg-red-200 border-red-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.fire ++ ") Fire")
+                [ text ("0 (+" ++ String.fromInt other.elements.fire ++ ") Fire")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-green-200 border-green-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.plant ++ ") Plant")
+                [ text ("0 (+" ++ String.fromInt other.elements.plant ++ ") Plant")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-blue-200 border-blue-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.water ++ ") Water")
+                [ text ("0 (+" ++ String.fromInt other.elements.water ++ ") Water")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-amber-200 border-amber-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.earth ++ ") Earth")
+                [ text ("0 (+" ++ String.fromInt other.elements.earth ++ ") Earth")
                 ]
             , div [ class "basis-1/5 text-center p-1 bg-purple-200 border-purple-500 border-2" ]
-                [ text ("0 (+" ++ String.fromInt other.chaos ++ ") Chaos")
+                [ text ("0 (+" ++ String.fromInt other.elements.chaos ++ ") Chaos")
                 ]
             ]
         ]

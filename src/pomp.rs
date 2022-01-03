@@ -25,6 +25,13 @@ pub struct PompPlayerView {
 struct PlayerInventoryView {
     name: String,
     energy: u32,
+    elements: ElementVector,
+}
+
+/// There are a lot of places where we need one number for each element.
+/// This is a helper struct to make it easier to do that.
+#[derive(Debug, Default, Clone, Serialize)]
+struct ElementVector {
     fire: u32,
     plant: u32,
     water: u32,
@@ -32,16 +39,30 @@ struct PlayerInventoryView {
     chaos: u32,
 }
 
+impl ElementVector {
+    /// Increase value for the given element by the given amount.
+    fn add_element(&mut self, element: ElementColor, value: u32) {
+        match element {
+            ElementColor::Fire => self.fire += value,
+            ElementColor::Plant => self.plant += value,
+            ElementColor::Water => self.water += value,
+            ElementColor::Earth => self.earth += value,
+            ElementColor::Chaos => self.chaos += value,
+        }
+    }
+
+    /// Calculate the total value of all elements.
+    fn total(&self) -> u32 {
+        self.fire + self.plant + self.water + self.earth + self.chaos
+    }
+}
+
 impl PlayerInventoryView {
-    fn public_info(inv: &PlayerData) -> Self {
-        Self {
+    fn public_info(inv: &PlayerData) -> PlayerInventoryView {
+        PlayerInventoryView {
             name: inv.name.clone(),
             energy: inv.energy,
-            fire: inv.fire,
-            plant: inv.plant,
-            water: inv.water,
-            earth: inv.earth,
-            chaos: inv.chaos,
+            elements: inv.elements.clone(),
         }
     }
 }
@@ -63,11 +84,7 @@ struct PlayerData {
     name: String,
     enery_fraction_ticks: u8,
     energy: u32,
-    fire: u32,
-    plant: u32,
-    water: u32,
-    earth: u32,
-    chaos: u32,
+    elements: ElementVector,
 }
 
 impl PlayerData {
@@ -76,11 +93,7 @@ impl PlayerData {
             name,
             enery_fraction_ticks: 0,
             energy: 0,
-            fire: 0,
-            plant: 0,
-            water: 0,
-            earth: 0,
-            chaos: 0,
+            elements: ElementVector::default(),
         }
     }
 }
@@ -104,6 +117,8 @@ impl GameState {
         for _ in 0..5 {
             market.push(deck_3.pop());
         }
+
+        debug_assert_eq!(market.len(), 15);
 
         GameState {
             players: inventories,
@@ -148,15 +163,7 @@ impl SharedLiveState for GameState {
             .get(player)
             .expect("Player inventory not found");
 
-        let my_inventory = PlayerInventoryView {
-            name: my_data.name.clone(),
-            energy: my_data.energy,
-            fire: my_data.fire,
-            plant: my_data.plant,
-            water: my_data.water,
-            earth: my_data.earth,
-            chaos: my_data.chaos,
-        };
+        let my_inventory = PlayerInventoryView::public_info(my_data);
 
         let mut others = Vec::with_capacity(self.players.len() - 1);
 
@@ -217,13 +224,7 @@ impl PlayerData {
     fn buy(&mut self, color: ElementColor) {
         if self.energy >= 1 {
             self.energy -= 1;
-            match color {
-                ElementColor::Fire => self.fire += 1,
-                ElementColor::Plant => self.plant += 1,
-                ElementColor::Water => self.water += 1,
-                ElementColor::Earth => self.earth += 1,
-                ElementColor::Chaos => self.chaos += 1,
-            }
+            self.elements.add_element(color, 1);
         }
     }
 }
@@ -233,11 +234,7 @@ struct Card {
     id: usize, // We need to tag the card to make it buyable.
     color: ElementColor,
     points: usize,
-    fire_cost: usize,
-    plant_cost: usize,
-    water_cost: usize,
-    earth_cost: usize,
-    chaos_cost: usize,
+    cost: ElementVector,
 }
 
 impl Distribution<ElementColor> for Standard {
@@ -338,34 +335,20 @@ impl Card {
             id,
             color: rand::random(),
             points,
-            fire_cost: 0,
-            plant_cost: 0,
-            water_cost: 0,
-            earth_cost: 0,
-            chaos_cost: 0,
+            cost: ElementVector::default(),
         };
 
         for _ in 0..cost {
             card.random_inc();
         }
 
-        debug_assert_eq!(card.total_cost(), cost);
+        debug_assert_eq!(card.cost.total(), cost as u32);
         card
     }
 
     fn random_inc(&mut self) {
         let color: ElementColor = rand::random();
-        match color {
-            ElementColor::Fire => self.fire_cost += 1,
-            ElementColor::Plant => self.plant_cost += 1,
-            ElementColor::Water => self.water_cost += 1,
-            ElementColor::Earth => self.earth_cost += 1,
-            ElementColor::Chaos => self.chaos_cost += 1,
-        }
-    }
-
-    fn total_cost(&self) -> usize {
-        self.fire_cost + self.plant_cost + self.water_cost + self.earth_cost + self.chaos_cost
+        self.cost.add_element(color, 1);
     }
 }
 

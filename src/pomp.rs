@@ -291,8 +291,8 @@ impl Card {
             // Cheap card with 1 victory point
             Self::fixed_cost_card(id, 1, 5)
         } else if x <= 4 {
-            // cheap card with 2 victory points
-            Self::fixed_cost_card(id, 2, 6)
+            // card with 1 victory point
+            Self::fixed_cost_card(id, 1, 6)
         } else {
             panic!("Invalid card level");
         }

@@ -64,7 +64,49 @@ viewMaybeCard maybeCard =
 
 viewCard : Card -> Html a
 viewCard card =
-    div [ class "text-center p-1 sm:p-2 border-gray-300 border-2" ] [ text card.color ]
+    div [ class "p-1 sm:p-2 border-gray-300 border-2" ]
+        [ div [ class "flex flex-row" ]
+            [ div [ class "basis-1/2" ] [ text card.color ]
+            , div [ class "basis-1/2 text-right" ] [ text (String.fromInt card.points) ]
+            ]
+        , viewCardCost card
+        ]
+
+
+{-| This shows how much a card costs. All elements that don't have to be paid
+at all, are left out from the listing. Instead they are padded in the front
+with empty lines.
+-}
+viewCardCost : Card -> Html a
+viewCardCost card =
+    let
+        s name cardCost =
+            if cardCost == 0 then
+                []
+
+            else
+                [ name ++ ": " ++ String.fromInt cardCost ]
+
+        cost =
+            List.concat
+                [ s "Fire" card.fireCost
+                , s "Plant" card.plantCost
+                , s "Water" card.waterCost
+                , s "Earth" card.earthCost
+                , s "Chaos" card.chaosCost
+                ]
+
+        costDivList =
+            List.map (\t -> div [] [ text t ]) cost
+
+        -- &nbsp; is a non-breaking space
+        noBreakSpace =
+            String.fromChar '\u{00A0}'
+
+        pad =
+            List.repeat (5 - List.length cost) (div [] [ text noBreakSpace ])
+    in
+    div [] (pad ++ costDivList)
 
 
 viewOthers : List PompOthersInventory -> Html a

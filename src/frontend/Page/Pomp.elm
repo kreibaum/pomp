@@ -9,10 +9,24 @@ import LiveData exposing (..)
 view : PompLiveState -> Html PompRemoteEvent
 view model =
     div []
-        [ viewMyInventory model.myInventory
+        [ viewWinner model.winner
+        , viewMyInventory model.myInventory
         , viewMarketplace model.market
         , viewOthers model.others
         ]
+
+
+viewWinner : Maybe String -> Html a
+viewWinner maybeWinner =
+    case maybeWinner of
+        Nothing ->
+            div [] []
+
+        Just winner ->
+            div [ class "text-center bg-yellow-300 p-1 sm:p-2 font-bold m-1" ]
+                [ text winner
+                , text " won the game!"
+                ]
 
 
 viewMyInventory : PompMyInventory -> Html PompRemoteEvent

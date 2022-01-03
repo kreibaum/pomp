@@ -49,6 +49,7 @@ type alias PompLiveState =
     { myInventory : PompMyInventory
     , others : List PompOthersInventory
     , market : List (Maybe Card)
+    , winner : Maybe String
     }
 
 
@@ -99,10 +100,11 @@ type alias PompOthersInventory =
 
 decodePompLiveState : Json.Decode.Decoder PompLiveState
 decodePompLiveState =
-    Json.Decode.map3 PompLiveState
+    Json.Decode.map4 PompLiveState
         (Json.Decode.field "my_inventory" decodeRootMyInventory)
         (Json.Decode.field "others" <| Json.Decode.list decodeRootOthersObject)
         (Json.Decode.field "market" <| Json.Decode.list (Json.Decode.maybe decodeCardObject))
+        (Json.Decode.field "winner" <| Json.Decode.maybe Json.Decode.string)
 
 
 decodeCardObject : Json.Decode.Decoder Card

@@ -10,8 +10,14 @@ use crate::{
     setup,
 };
 
+/// Time resolution of the game.
+const TICKS_PER_SECOND: u64 = 5;
+
 /// How many ticks the game progresses before a player gets energy.
-const TICKS_PER_ENERGY: u8 = 10;
+const TICKS_PER_ENERGY: u8 = 2 * TICKS_PER_SECOND as u8;
+
+/// Score needed to win the game.
+const SCORE_TO_WIN: u32 = 15;
 
 /// Shared state for one player
 #[derive(Debug, Default, Clone, Serialize)]
@@ -19,6 +25,7 @@ pub struct PompPlayerView {
     my_inventory: PlayerInventoryView,
     others: Vec<PlayerInventoryView>,
     market: Vec<Option<Card>>,
+    winner: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -125,6 +132,7 @@ pub struct GameState {
     deck_2: Vec<Card>,
     deck_3: Vec<Card>,
     market: Vec<Option<Card>>,
+    winner: Option<String>,
 }
 
 #[derive(Debug)]
@@ -178,6 +186,7 @@ impl GameState {
             deck_2,
             deck_3,
             market,
+            winner: None,
         }
     }
 }
@@ -230,11 +239,17 @@ impl SharedLiveState for GameState {
             my_inventory,
             others,
             market: self.market.clone(),
+            winner: self.winner.clone(),
         }
     }
 
     /// Process a remote event.
     fn process_remote_event(&mut self, event: PompEvent, sender: UserUuid) -> LiveEffect {
+        if self.winner.is_some() {
+            // Game is over.
+            return LiveEffect::None;
+        }
+
         match event {
             PompEvent::Buy(color) => {
                 let inventory = self.players.get_mut(&sender).unwrap();
@@ -280,16 +295,30 @@ impl SharedLiveState for GameState {
                 inventory.points += new_card.points;
             }
         }
+
+        // Check if we have a winner.
+        for (_, inventory) in self.players.iter() {
+            if inventory.points >= SCORE_TO_WIN {
+                self.winner = Some(inventory.name.clone());
+                break;
+            }
+        }
+
         LiveEffect::None
     }
 
     fn tick_frequency(&self) -> Option<Duration> {
         // Game Loop runs at 5 fps
-        Some(Duration::from_millis(200))
+        Some(Duration::from_millis(1000 / TICKS_PER_SECOND))
     }
 
     /// Processes a game logic tick.
     fn process_tick(&mut self) -> LiveEffect {
+        if self.winner.is_some() {
+            // Game is over.
+            return LiveEffect::None;
+        }
+
         for (_player, inventory) in self.players.iter_mut() {
             inventory.enery_fraction_ticks += 1;
             if inventory.enery_fraction_ticks >= TICKS_PER_ENERGY {

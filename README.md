@@ -4,6 +4,8 @@ Experimenting on a real time online board game inspired by Splendor.
 
 ## Running
 
+[![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/kreibaum/pomp)
+
 This still needs improvement.
 
     swc static/main.ts -o target/main.js

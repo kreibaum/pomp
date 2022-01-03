@@ -74,7 +74,7 @@ viewCard card =
 
 
 {-| This shows how much a card costs. All elements that don't have to be paid
-at all, are left out from the listing. Instead they are padded in the front
+at all are left out from the listing. Instead they are padded in the front
 with empty lines.
 -}
 viewCardCost : Card -> Html a

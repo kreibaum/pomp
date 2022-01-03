@@ -10,6 +10,31 @@ This still needs improvement.
     elm-live src/frontend/Main.elm --start-page=static/index.html --hot -- --output=target/elm.js
     cargo watch -x 'run --bin pomp'
 
+# Game Rules
+
+If you are familiar with [Splendor](https://boardgamegeek.com/boardgame/148228/splendor)
+you'll already know the core mechanics. The goal is to collect 15 _victory points_
+first to win the game.
+
+You get _victory points_ by buying _cards_ from the _market_. These cards are paid
+with _elements_ from your hand. You start out without any elements but can take
+those in exchange for energy. Energy slowly aquires over time for all the players
+over time.
+
+Cards also have an element color which gives you a discount on all other cards
+you buy which have the same element cost.
+
+It is usually best to buy cards from the first row first, as they are cheapest
+and help you build up a discount for other cards.
+
+## Planned features
+
+- Chaos should become an (expensive) wildcard discount not avaliable for energy.
+- Gamble will be an option to buy random elements for a discount. It should
+  slowly aquire value until some player buys it.
+- Special power cards like "faster energy generation", "element generation".
+  These start out way overpriced and slowly become less expensive over time.
+
 # Tech Stack
 
 Right now looking at an Rust Actix backend and an Elm Frontend that is designed

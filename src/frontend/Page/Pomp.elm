@@ -43,7 +43,7 @@ viewMyInventory inventory =
         ]
 
 
-viewMarketplace : List (Maybe Card) -> Html a
+viewMarketplace : List (Maybe Card) -> Html PompRemoteEvent
 viewMarketplace cards =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2 sm:space-y-1" ]
         [ div [ class "font-bold text-center" ] [ text "Marketplace" ]
@@ -52,7 +52,7 @@ viewMarketplace cards =
         ]
 
 
-viewMaybeCard : Maybe Card -> Html a
+viewMaybeCard : Maybe Card -> Html PompRemoteEvent
 viewMaybeCard maybeCard =
     case maybeCard of
         Just card ->
@@ -62,9 +62,9 @@ viewMaybeCard maybeCard =
             div [ class "text-center p-1 sm:p-2 border-gray-300 border-2" ] [ text "Sold" ]
 
 
-viewCard : Card -> Html a
+viewCard : Card -> Html PompRemoteEvent
 viewCard card =
-    div [ class "p-1 sm:p-2 border-gray-300 border-2" ]
+    button [ class "p-1 sm:p-2 border-gray-300 border-2", onClick (BuyCard card.id) ]
         [ div [ class "flex flex-row" ]
             [ div [ class "basis-1/2" ] [ text card.color ]
             , div [ class "basis-1/2 text-right" ] [ text (String.fromInt card.points) ]

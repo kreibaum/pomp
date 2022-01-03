@@ -1,6 +1,6 @@
 //! Contains only core game logic for the Pomp game.
 //!
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, mem, time::Duration};
 
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,37 @@ impl ElementVector {
     /// Calculate the total value of all elements.
     fn total(&self) -> u32 {
         self.fire + self.plant + self.water + self.earth + self.chaos
+    }
+
+    /// Returns if this vector is pointwise greater or equal than the other.
+    /// Not that this only defines a partial ordering.
+    fn geq(&self, other: &Self) -> bool {
+        self.fire >= other.fire
+            && self.plant >= other.plant
+            && self.water >= other.water
+            && self.earth >= other.earth
+            && self.chaos >= other.chaos
+    }
+
+    /// Substracts a smaller vector from this vector.
+    /// Only call this when you already know that this >= other.
+    fn minus(&mut self, subtrahend: &Self) {
+        assert!(self.geq(subtrahend));
+        self.fire -= subtrahend.fire;
+        self.plant -= subtrahend.plant;
+        self.water -= subtrahend.water;
+        self.earth -= subtrahend.earth;
+        self.chaos -= subtrahend.chaos;
+    }
+
+    /// Version of minus where it is assumed that we may go into negative numbers
+    /// and those are converted to 0. Useful for discounts.
+    fn restricted_minus(&mut self, subtrahend: &Self) {
+        self.fire = self.fire.saturating_sub(subtrahend.fire);
+        self.plant = self.plant.saturating_sub(subtrahend.plant);
+        self.water = self.water.saturating_sub(subtrahend.water);
+        self.earth = self.earth.saturating_sub(subtrahend.earth);
+        self.chaos = self.chaos.saturating_sub(subtrahend.chaos);
     }
 }
 
@@ -143,6 +174,7 @@ pub enum ElementColor {
 #[derive(Debug, Clone, Deserialize)]
 pub enum PompEvent {
     Buy(ElementColor),
+    BuyCard(usize),
 }
 
 impl RemoteEvent for PompEvent {
@@ -186,6 +218,36 @@ impl SharedLiveState for GameState {
             PompEvent::Buy(color) => {
                 let inventory = self.players.get_mut(&sender).unwrap();
                 inventory.buy(color);
+            }
+            PompEvent::BuyCard(id) => {
+                // First, check if this card is currently on the market.
+                // If it isn't there, this can be a timing issue where two players
+                // try to buy the same card at the same time.
+                let inventory = self.players.get_mut(&sender).unwrap();
+                let mut market_index = 999;
+                for (i, c) in self.market.iter().enumerate() {
+                    if let Some(c) = c {
+                        // TODO: Discount
+                        if c.id == id && inventory.elements.geq(&c.cost) {
+                            market_index = i;
+                            break;
+                        }
+                    }
+                }
+                if market_index == 999 {
+                    return LiveEffect::None;
+                }
+                let mut new_card = if market_index < 5 {
+                    self.deck_1.pop()
+                } else if market_index < 10 {
+                    self.deck_2.pop()
+                } else {
+                    self.deck_3.pop()
+                };
+                mem::swap(&mut self.market[market_index], &mut new_card);
+                let new_card = new_card.unwrap();
+                inventory.elements.minus(&new_card.cost);
+                // TODO: Discount
             }
         }
         LiveEffect::None

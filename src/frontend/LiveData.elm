@@ -148,6 +148,7 @@ type ElementColor
 -}
 type PompRemoteEvent
     = Buy ElementColor
+    | BuyCard Int
 
 
 encodePompRemoteEvent : PompRemoteEvent -> Value
@@ -155,6 +156,9 @@ encodePompRemoteEvent e =
     case e of
         Buy color ->
             Json.Encode.object [ ( "Buy", encodeElementColor color ) ]
+
+        BuyCard id ->
+            Json.Encode.object [ ( "BuyCard", Json.Encode.int id ) ]
 
 
 encodeElementColor : ElementColor -> Value

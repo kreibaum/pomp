@@ -6,6 +6,11 @@ use crate::{
 };
 /// Setting up a game of pomp. When you are done, you can forward all the
 /// connected players to the pomp LiveState.
+// Define which types get exported to Elm by rust_elm_typegen.
+use rust_elm_typegen::ElmExport;
+impl ElmExport for SetupPlayerView {}
+impl ElmExport for PlayerSetupData {}
+impl ElmExport for SetupEvent {}
 
 #[derive(Debug, Default)]
 pub struct GameState {

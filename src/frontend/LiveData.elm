@@ -6,6 +6,7 @@ when that is done, it also needs to move to /generated instead of /src/frontend.
 
 import Json.Decode
 import Json.Encode exposing (Value)
+import PompData exposing (PompEvent, encodePompEvent)
 
 
 decodeLiveStateOneRouteOnly : String -> Json.Decode.Decoder page -> (page -> wrapped) -> Json.Decode.Decoder wrapped
@@ -25,7 +26,7 @@ decodeLiveStateOneRouteOnly routeId decoder wrapper =
 {-| Overall remote event. Required for now until I figure out better typing.
 -}
 type RemoteEvent
-    = PompRemoteEventWrapper PompRemoteEvent
+    = PompRemoteEventWrapper PompEvent
     | SetupRemoteEventWrapper SetupRemoteEvent
 
 
@@ -34,160 +35,10 @@ encodeRemoteEvent e =
     case e of
         -- TODO: Attach the curret route we are on so we can drop irrelevant messages on the server.
         PompRemoteEventWrapper x ->
-            encodePompRemoteEvent x
+            encodePompEvent x
 
         SetupRemoteEventWrapper x ->
             encodeSetupRemoteEvent x
-
-
-
--- Pomp Live State -------------------------------------------------------------
---------------------------------------------------------------------------------
-
-
-type alias PompLiveState =
-    { myInventory : PompMyInventory
-    , others : List PompOthersInventory
-    , market : List (Maybe Card)
-    , winner : Maybe String
-    }
-
-
-type alias ElementVector =
-    { chaos : Int
-    , earth : Int
-    , fire : Int
-    , plant : Int
-    , water : Int
-    }
-
-
-decodeElementVector : Json.Decode.Decoder ElementVector
-decodeElementVector =
-    Json.Decode.map5 ElementVector
-        (Json.Decode.field "chaos" Json.Decode.int)
-        (Json.Decode.field "earth" Json.Decode.int)
-        (Json.Decode.field "fire" Json.Decode.int)
-        (Json.Decode.field "plant" Json.Decode.int)
-        (Json.Decode.field "water" Json.Decode.int)
-
-
-type alias Card =
-    { id : Int
-    , color : String
-    , points : Int
-    , cost : ElementVector
-    }
-
-
-type alias PompMyInventory =
-    { name : String
-    , points : Int
-    , energy : Int
-    , elements : ElementVector
-    , discount : ElementVector
-    }
-
-
-type alias PompOthersInventory =
-    { name : String
-    , points : Int
-    , energy : Int
-    , elements : ElementVector
-    , discount : ElementVector
-    }
-
-
-decodePompLiveState : Json.Decode.Decoder PompLiveState
-decodePompLiveState =
-    Json.Decode.map4 PompLiveState
-        (Json.Decode.field "my_inventory" decodeRootMyInventory)
-        (Json.Decode.field "others" <| Json.Decode.list decodeRootOthersObject)
-        (Json.Decode.field "market" <| Json.Decode.list (Json.Decode.maybe decodeCardObject))
-        (Json.Decode.field "winner" <| Json.Decode.maybe Json.Decode.string)
-
-
-decodeCardObject : Json.Decode.Decoder Card
-decodeCardObject =
-    Json.Decode.map4 Card
-        (Json.Decode.field "id" Json.Decode.int)
-        (Json.Decode.field "color" Json.Decode.string)
-        (Json.Decode.field "points" Json.Decode.int)
-        (Json.Decode.field "cost" decodeElementVector)
-
-
-decodeRootMyInventory : Json.Decode.Decoder PompMyInventory
-decodeRootMyInventory =
-    Json.Decode.map5 PompMyInventory
-        (Json.Decode.field "name" Json.Decode.string)
-        (Json.Decode.field "points" <| Json.Decode.int)
-        (Json.Decode.field "energy" Json.Decode.int)
-        (Json.Decode.field "elements" decodeElementVector)
-        (Json.Decode.field "discount" decodeElementVector)
-
-
-decodeRootOthersObject : Json.Decode.Decoder PompOthersInventory
-decodeRootOthersObject =
-    Json.Decode.map5 PompOthersInventory
-        (Json.Decode.field "name" Json.Decode.string)
-        (Json.Decode.field "points" <| Json.Decode.int)
-        (Json.Decode.field "energy" Json.Decode.int)
-        (Json.Decode.field "elements" decodeElementVector)
-        (Json.Decode.field "discount" decodeElementVector)
-
-
-
--- Pomp Remote Event -----------------------------------------------------------
---------------------------------------------------------------------------------
-
-
-type ElementColor
-    = Fire
-    | Plant
-    | Water
-    | Earth
-    | Chaos
-
-
-{-| Elm version of
-
-    enum RemoteEvent {
-        Buy(ElementColor),
-    }
-
--}
-type PompRemoteEvent
-    = Buy ElementColor
-    | BuyCard Int
-
-
-encodePompRemoteEvent : PompRemoteEvent -> Value
-encodePompRemoteEvent e =
-    case e of
-        Buy color ->
-            Json.Encode.object [ ( "Buy", encodeElementColor color ) ]
-
-        BuyCard id ->
-            Json.Encode.object [ ( "BuyCard", Json.Encode.int id ) ]
-
-
-encodeElementColor : ElementColor -> Value
-encodeElementColor e =
-    case e of
-        Fire ->
-            Json.Encode.string "Fire"
-
-        Plant ->
-            Json.Encode.string "Plant"
-
-        Water ->
-            Json.Encode.string "Water"
-
-        Earth ->
-            Json.Encode.string "Earth"
-
-        Chaos ->
-            Json.Encode.string "Chaos"
 
 
 {-| Elm version of

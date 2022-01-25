@@ -4,9 +4,10 @@ import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import LiveData exposing (..)
+import PompData exposing (..)
 
 
-view : PompLiveState -> Html PompRemoteEvent
+view : PompPlayerView -> Html PompEvent
 view model =
     div []
         [ viewWinner model.winner
@@ -29,7 +30,7 @@ viewWinner maybeWinner =
                 ]
 
 
-viewMyInventory : PompMyInventory -> Html PompRemoteEvent
+viewMyInventory : PlayerInventoryView -> Html PompEvent
 viewMyInventory inventory =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2" ]
         [ div [ class "flex flex-row sm:space-x-1" ]
@@ -57,7 +58,7 @@ viewMyInventory inventory =
         ]
 
 
-viewMarketplace : List (Maybe Card) -> Html PompRemoteEvent
+viewMarketplace : List (Maybe Card) -> Html PompEvent
 viewMarketplace cards =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2 sm:space-y-1" ]
         [ div [ class "font-bold text-center" ] [ text "Marketplace" ]
@@ -66,7 +67,7 @@ viewMarketplace cards =
         ]
 
 
-viewMaybeCard : Maybe Card -> Html PompRemoteEvent
+viewMaybeCard : Maybe Card -> Html PompEvent
 viewMaybeCard maybeCard =
     case maybeCard of
         Just card ->
@@ -76,15 +77,34 @@ viewMaybeCard maybeCard =
             div [ class "text-center p-1 sm:p-2 border-gray-300 border-2" ] [ text "Sold" ]
 
 
-viewCard : Card -> Html PompRemoteEvent
+viewCard : Card -> Html PompEvent
 viewCard card =
     button [ class "p-1 sm:p-2 border-gray-300 border-2", onClick (BuyCard card.id) ]
         [ div [ class "flex flex-row" ]
-            [ div [ class "basis-1/2" ] [ text card.color ]
+            [ div [ class "basis-1/2" ] [ text (colorName card.color) ]
             , div [ class "basis-1/2 text-right" ] [ text (String.fromInt card.points) ]
             ]
         , viewCardCost card
         ]
+
+
+colorName : ElementColor -> String
+colorName color =
+    case color of
+        Fire ->
+            "Fire"
+
+        Plant ->
+            "Plant"
+
+        Water ->
+            "Water"
+
+        Earth ->
+            "Earth"
+
+        Chaos ->
+            "Chaos"
 
 
 {-| This shows how much a card costs. All elements that don't have to be paid
@@ -123,13 +143,13 @@ viewCardCost card =
     div [] (pad ++ costDivList)
 
 
-viewOthers : List PompOthersInventory -> Html a
+viewOthers : List PlayerInventoryView -> Html a
 viewOthers others =
     div []
         (List.map viewOther others)
 
 
-viewOther : PompOthersInventory -> Html a
+viewOther : PlayerInventoryView -> Html a
 viewOther other =
     div [ class "m-1 bg-gray-100 p-1 sm:p-2" ]
         [ div [ class "flex flex-row sm:space-x-1" ]

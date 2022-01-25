@@ -8,6 +8,7 @@ import LiveData
 import Page.Loading
 import Page.Pomp
 import Page.Setup
+import PompData
 import Websocket
 
 
@@ -83,7 +84,7 @@ sandboxLiveStateParser value =
 {-| Overall live state. Should be automatically generated eventually.
 -}
 type LiveState
-    = PompLiveStateWrapper LiveData.PompLiveState
+    = PompLiveStateWrapper PompData.PompPlayerView
     | SetupLiveStateWrapper LiveData.SetupLiveState
 
 
@@ -93,6 +94,6 @@ to decode into and then decodes the "data" accordingly.
 decodeLiveState : Json.Decode.Decoder LiveState
 decodeLiveState =
     Json.Decode.oneOf
-        [ LiveData.decodeLiveStateOneRouteOnly "pomp" LiveData.decodePompLiveState PompLiveStateWrapper
+        [ LiveData.decodeLiveStateOneRouteOnly "pomp" PompData.decodePompPlayerView PompLiveStateWrapper
         , LiveData.decodeLiveStateOneRouteOnly "setup" LiveData.decodeSetupLiveState SetupLiveStateWrapper
         ]

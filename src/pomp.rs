@@ -10,6 +10,15 @@ use crate::{
     setup,
 };
 
+// Define which types get exported to Elm by rust_elm_typegen.
+use rust_elm_typegen::ElmExport;
+impl ElmExport for PompPlayerView {}
+impl ElmExport for PlayerInventoryView {}
+impl ElmExport for ElementVector {}
+impl ElmExport for Card {}
+impl ElmExport for ElementColor {}
+impl ElmExport for PompEvent {}
+
 /// Time resolution of the game.
 const TICKS_PER_SECOND: u64 = 5;
 

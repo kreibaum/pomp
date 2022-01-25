@@ -1,0 +1,11 @@
+tasks:
+  - init: ./gitpod-init.sh
+  - command: elm-live src/frontend/Main.elm --start-page=static/index.html --hot -- --output=target/elm.js
+  - command: cargo watch -x 'run --bin pomp'
+image:
+  file: .gitpod.Dockerfile
+ports:
+  - port: 8000
+    onOpen: open-preview
+  - port: 8080
+    onOpen: ignore

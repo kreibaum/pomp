@@ -13,25 +13,14 @@ use actix_web_actors::ws;
 
 use game::{RemoteEvent, SharedLiveState, UserUuid, UserView};
 use lazy_static::lazy_static;
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use regex::Regex;
 use serde::Serialize;
-use temp::BoxAddr;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Remote Events need to track who send them so the game can process them properly.
-struct RemoteEventRaw {
-    event: String,
-    sender: UserUuid,
-}
-
-impl Message for RemoteEventRaw {
-    type Result = ();
-}
 
 /// The `WebsocketActor` takes care of the websocket connection. It forwards the
 /// current `UserView` (LiveState) to the client. It also tracks which
@@ -45,7 +34,7 @@ impl Message for RemoteEventRaw {
 struct WebsocketActor {
     hb: Instant,
     uuid: UserUuid,
-    backing_actor: BoxAddr,
+    backing_actor: Recipient<SharedLiveActorMessage>,
     last_send: String,
 }
 
@@ -54,14 +43,26 @@ impl Actor for WebsocketActor {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         // Register self to get updates to the game state
-        self.backing_actor
-            .do_send(Subscribe(ctx.address(), self.uuid.clone()));
+        let result = self
+            .backing_actor
+            .do_send(SharedLiveActorMessage::Subscribe(
+                ctx.address(),
+                self.uuid.clone(),
+            ));
+        if result.is_err() {
+            error!("Could not subscribe to backing actor.");
+        }
         self.hb(ctx);
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         // Unregister self
-        self.backing_actor.do_send(Unsubscribe(ctx.address()));
+        let result = self
+            .backing_actor
+            .do_send(SharedLiveActorMessage::Unsubscribe(ctx.address()));
+        if result.is_err() {
+            error!("Could not unsubscribe from backing actor.");
+        }
     }
 }
 
@@ -87,10 +88,15 @@ impl WebsocketActor {
         // We can not decode the String into a structure directly inside the
         // WebsocketActor, because only the GameActor or LiveActor knows about
         // the right type to deserialize into.
-        self.backing_actor.do_send(RemoteEventRaw {
-            event: msg,
-            sender: self.uuid.clone(),
-        });
+        let result = self
+            .backing_actor
+            .do_send(SharedLiveActorMessage::ClientSideEvent {
+                event: msg,
+                sender: self.uuid.clone(),
+            });
+        if result.is_err() {
+            error!("Could not send client side event to backing actor.");
+        }
     }
 
     /// Heartbeat handler that will kill the process if the client dies.
@@ -137,7 +143,7 @@ impl<T: UserView> Handler<UpdateLiveState<T>> for WebsocketActor {
     }
 }
 
-struct PerformLiveRedirect(BoxAddr);
+struct PerformLiveRedirect(Recipient<SharedLiveActorMessage>);
 
 impl Message for PerformLiveRedirect {
     type Result = ();
@@ -148,8 +154,15 @@ impl Handler<PerformLiveRedirect> for WebsocketActor {
 
     fn handle(&mut self, msg: PerformLiveRedirect, ctx: &mut ws::WebsocketContext<WebsocketActor>) {
         self.backing_actor = msg.0;
-        self.backing_actor
-            .do_send(Subscribe(ctx.address(), self.uuid.clone()));
+        let result = self
+            .backing_actor
+            .do_send(SharedLiveActorMessage::Subscribe(
+                ctx.address(),
+                self.uuid.clone(),
+            ));
+        if result.is_err() {
+            error!("Could not subscribe to backing actor. (Called for redirect)");
+        }
     }
 }
 
@@ -221,31 +234,6 @@ impl<G: SharedLiveState> Actor for SharedLiveActor<G> {
     }
 }
 
-/// Technically, there should be a difference between RemoteEvents (Client -> LiveActor) and
-/// Events that are send from the LiveActor to the GameActor.
-impl<G: SharedLiveState> Handler<RemoteEventRaw> for SharedLiveActor<G> {
-    type Result = ResponseFuture<()>;
-
-    fn handle(&mut self, e: RemoteEventRaw, _ctx: &mut Self::Context) -> Self::Result {
-        let event = match RemoteEvent::deserialize(&e.event) {
-            Ok(event) => event,
-            Err(_) => {
-                println!(
-                    "Could not decode message as RemoteEvent: {} from sender {} on route {}",
-                    e.event,
-                    e.sender,
-                    G::route_id()
-                );
-                return Box::pin(async move {});
-            }
-        };
-
-        let effect = self.state.process_remote_event(event, e.sender);
-
-        self.handle_live_effect(effect)
-    }
-}
-
 impl<G: SharedLiveState> SharedLiveActor<G> {
     fn handle_live_effect(
         &mut self,
@@ -311,53 +299,66 @@ impl<G: SharedLiveState> SharedLiveActor<G> {
     }
 }
 
-/// A LiveActor subscribes to the GameActor to get updates.
-struct Subscribe(Addr<WebsocketActor>, UserUuid);
+// Message send by the Websocket actor to the backing Live State Actor.
+enum SharedLiveActorMessage {
+    Subscribe(Addr<WebsocketActor>, UserUuid),
+    Unsubscribe(Addr<WebsocketActor>),
+    ClientSideEvent { event: String, sender: UserUuid },
+}
 
-impl Message for Subscribe {
+impl Message for SharedLiveActorMessage {
     type Result = ();
 }
 
-impl<G: SharedLiveState> Handler<Subscribe> for SharedLiveActor<G> {
+impl<G: SharedLiveState> Handler<SharedLiveActorMessage> for SharedLiveActor<G> {
     type Result = ResponseFuture<()>;
 
-    fn handle(&mut self, msg: Subscribe, _: &mut Self::Context) -> Self::Result {
-        println!("New connection from {}", msg.1);
-        self.subs.insert(msg.0.clone(), msg.1.clone());
-        let effect = self.state.join_user(msg.1);
-        println!("Connected sockets: {}", self.subs.len());
+    fn handle(&mut self, msg: SharedLiveActorMessage, _ctx: &mut Self::Context) -> Self::Result {
+        match msg {
+            SharedLiveActorMessage::Subscribe(sub, uuid) => {
+                println!("New connection from {}", uuid);
+                self.subs.insert(sub, uuid.clone());
+                let effect = self.state.join_user(uuid);
+                println!("Connected sockets: {}", self.subs.len());
+                self.handle_live_effect(effect)
+            }
+            SharedLiveActorMessage::Unsubscribe(sub) => {
+                // Note that this does not tell the game implementation about the change.
+                // This is because here we just take care of the disconnecting websocket
+                // and the person who left may still be connected in another browser tab.
+                self.subs.remove(&sub);
+                println!("Remaining sockets: {}", self.subs.len());
+                Box::pin(async move {})
+            }
+            SharedLiveActorMessage::ClientSideEvent { event, sender } => {
+                let event = match RemoteEvent::deserialize(&event) {
+                    Ok(event) => event,
+                    Err(_) => {
+                        println!(
+                            "Could not decode message as RemoteEvent: {} from sender {} on route {}",
+                            event,
+                            sender,
+                            G::route_id()
+                        );
+                        return Box::pin(async move {});
+                    }
+                };
 
-        self.handle_live_effect(effect)
+                let effect = self.state.process_remote_event(event, sender);
+
+                self.handle_live_effect(effect)
+            }
+        }
     }
 }
-
-/// When a LiveActor disconnects, it unsubscribes from the GameActor.
-struct Unsubscribe(Addr<WebsocketActor>);
-
-impl Message for Unsubscribe {
-    type Result = ();
-}
-
-impl<G: SharedLiveState> Handler<Unsubscribe> for SharedLiveActor<G> {
-    type Result = ();
-
-    fn handle(&mut self, msg: Unsubscribe, _: &mut Self::Context) -> Self::Result {
-        // Note that this does not tell the game implementation about the change.
-        // This is because here we just take care of the disconnecting websocket
-        // and the person who left may still be connected in another browser tab.
-        self.subs.remove(&msg.0);
-        println!("Remaining sockets: {}", self.subs.len());
-    }
-}
-
 // Live Route Broker that knows all the actors for live routes and can set up //
 // new ones.                                                                  //
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default)]
 struct LiveRouteBroker {
-    setup: Option<BoxAddr>,
-    pomp: Option<BoxAddr>,
+    setup: Option<Recipient<SharedLiveActorMessage>>,
+    pomp: Option<Recipient<SharedLiveActorMessage>>,
 }
 
 impl Supervised for LiveRouteBroker {}
@@ -373,7 +374,7 @@ impl Actor for LiveRouteBroker {
 struct RouteResolution(String);
 
 impl Message for RouteResolution {
-    type Result = Option<BoxAddr>;
+    type Result = Option<Recipient<SharedLiveActorMessage>>;
 }
 
 lazy_static! {
@@ -382,7 +383,7 @@ lazy_static! {
 }
 
 impl Handler<RouteResolution> for LiveRouteBroker {
-    type Result = Option<BoxAddr>;
+    type Result = Option<Recipient<SharedLiveActorMessage>>;
 
     fn handle(&mut self, msg: RouteResolution, _ctx: &mut Self::Context) -> Self::Result {
         debug!("Resolving route {}", msg.0);
@@ -407,7 +408,7 @@ impl Handler<RouteResolution> for LiveRouteBroker {
                 info!("Spawning new setup actor");
                 let actor: SharedLiveActor<setup::GameState> = SharedLiveActor::default();
                 let addr = actor.start();
-                self.setup = Some(BoxAddr::Setup(addr));
+                self.setup = Some(addr.recipient());
             }
             return Some(self.setup.clone().unwrap());
         }
@@ -421,11 +422,11 @@ struct RouteResolutionWithSetup(String, Box<dyn Any + Send>);
 impl Message for RouteResolutionWithSetup {
     // TODO: Right now None is "not found" and "illegal setup". I should introduce
     // a custom error type here. (With an Into<Error> impl for actix.)
-    type Result = Option<BoxAddr>;
+    type Result = Option<Recipient<SharedLiveActorMessage>>;
 }
 
 impl Handler<RouteResolutionWithSetup> for LiveRouteBroker {
-    type Result = Option<BoxAddr>;
+    type Result = Option<Recipient<SharedLiveActorMessage>>;
 
     fn handle(&mut self, msg: RouteResolutionWithSetup, _ctx: &mut Self::Context) -> Self::Result {
         debug!("Resolving route {} (with setup data)", msg.0);
@@ -440,40 +441,12 @@ impl Handler<RouteResolutionWithSetup> for LiveRouteBroker {
 
                 let actor = SharedLiveActor::new(game);
                 let addr = actor.start();
-                self.pomp = Some(BoxAddr::Pomp(addr));
+                self.pomp = Some(addr.recipient());
             }
             return self.pomp.clone();
         }
 
         todo!()
-    }
-}
-
-mod temp {
-    //! Module that holds app-specific boilerplate code that should be eliminated
-    //! or automatically generated.
-    use super::*;
-
-    #[derive(Clone)]
-    pub(crate) enum BoxAddr {
-        Setup(Addr<SharedLiveActor<setup::GameState>>),
-        Pomp(Addr<SharedLiveActor<pomp::GameState>>),
-    }
-
-    impl BoxAddr {
-        // If a message can be send to all the LiveActors, the PageActor accepts it.
-        pub(crate) fn do_send<M>(&self, m: M)
-        where
-            M: Message + Send + 'static,
-            M::Result: Send + 'static,
-            SharedLiveActor<pomp::GameState>: Handler<M>,
-            SharedLiveActor<setup::GameState>: Handler<M>,
-        {
-            match self {
-                BoxAddr::Pomp(addr) => addr.do_send(m),
-                BoxAddr::Setup(addr) => addr.do_send(m),
-            }
-        }
     }
 }
 

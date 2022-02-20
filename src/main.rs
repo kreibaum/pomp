@@ -1,6 +1,8 @@
 mod game;
 mod pomp;
 mod setup;
+mod wedding;
+mod wedding_types;
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -113,7 +115,7 @@ impl WebsocketActor {
     }
 }
 
-/// The GameActor tells the LiveActor about the game state.
+/// The Live Actor tells the Websocket about the game state.
 #[derive(Serialize)]
 struct UpdateLiveState<T: UserView> {
     route: &'static str,
@@ -170,7 +172,7 @@ impl Handler<PerformLiveRedirect> for WebsocketActor {
 async fn websocket_connect(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     if let Some(uuid) = UserUuid::from_query_string(req.query_string()) {
         let router = LiveRouteBroker::from_registry();
-        let m = RouteResolution("/pomp/1/setup".to_owned());
+        let m = RouteResolution("/wedding".to_owned());
         let addr = router
             .send(m)
             .await
@@ -359,6 +361,7 @@ impl<G: SharedLiveState> Handler<SharedLiveActorMessage> for SharedLiveActor<G> 
 struct LiveRouteBroker {
     setup: Option<Recipient<SharedLiveActorMessage>>,
     pomp: Option<Recipient<SharedLiveActorMessage>>,
+    wedding: Option<Recipient<SharedLiveActorMessage>>,
 }
 
 impl Supervised for LiveRouteBroker {}
@@ -386,6 +389,16 @@ impl Handler<RouteResolution> for LiveRouteBroker {
     type Result = Option<Recipient<SharedLiveActorMessage>>;
 
     fn handle(&mut self, msg: RouteResolution, _ctx: &mut Self::Context) -> Self::Result {
+        if msg.0 == "/wedding" {
+            if self.wedding.is_none() {
+                let actor: SharedLiveActor<wedding::WeddingData> =
+                    SharedLiveActor::new(wedding::WeddingData::default());
+                let addr = actor.start();
+                self.wedding = Some(addr.recipient());
+            }
+            return Some(self.wedding.clone().unwrap());
+        }
+
         debug!("Resolving route {}", msg.0);
 
         // TODO: This needs to be replaced by some propper router eventually.

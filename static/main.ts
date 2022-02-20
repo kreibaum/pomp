@@ -5,6 +5,32 @@
 /// controll.
 declare var Elm: any;
 
+/// Define a web-component to get around issues with input fields without client state.
+class NameInput extends HTMLElement {
+
+    constructor() {
+        super();
+
+        let shadowRoot = this.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = `
+            <input placeholder="Dein Name" /><br />
+            <button>Mitspielen</button>`;
+        shadowRoot.querySelector(`button`).addEventListener('click', (_event) => this.handleClick());
+    }
+
+    private handleClick() {
+        // Fire a custom event with the value of the input field.
+        let event = new CustomEvent('name-input', {
+            detail: {
+                name: this.shadowRoot.querySelector('input').value
+            }
+        });
+        this.dispatchEvent(event);
+    }
+}
+
+window.customElements.define('name-input', NameInput);
+
 /// Init Elm app. Ports can only be set up after this.
 var app = Elm.Main.init({
     node: document.getElementById("myapp"),

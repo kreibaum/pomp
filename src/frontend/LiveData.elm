@@ -7,6 +7,7 @@ when that is done, it also needs to move to /generated instead of /src/frontend.
 import Json.Decode
 import Json.Encode exposing (Value)
 import PompData exposing (PompEvent, encodePompEvent)
+import WeddingData
 
 
 decodeLiveStateOneRouteOnly : String -> Json.Decode.Decoder page -> (page -> wrapped) -> Json.Decode.Decoder wrapped
@@ -28,6 +29,7 @@ decodeLiveStateOneRouteOnly routeId decoder wrapper =
 type RemoteEvent
     = PompRemoteEventWrapper PompEvent
     | SetupRemoteEventWrapper SetupRemoteEvent
+    | WeddingRemoteEventWrapper WeddingData.WeddingEvent
 
 
 encodeRemoteEvent : RemoteEvent -> Value
@@ -39,6 +41,9 @@ encodeRemoteEvent e =
 
         SetupRemoteEventWrapper x ->
             encodeSetupRemoteEvent x
+
+        WeddingRemoteEventWrapper x ->
+            WeddingData.encodeWeddingEvent x
 
 
 {-| Elm version of

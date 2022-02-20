@@ -61,12 +61,12 @@ impl SharedLiveState for WeddingData {
     fn user_view(&self, player: &UserUuid) -> Self::View {
         let player_data = self.players.get(player);
         if self.hosts.contains(player) {
-            WeddingView::Host {
+            WeddingView::Host(HostView {
                 questions: self.questions.clone(),
                 current_question: self.current_question,
-            }
+            })
         } else if let Some(player_data) = player_data {
-            WeddingView::Guest {
+            WeddingView::Guest(GuestView {
                 name: player_data.name.clone(),
                 question: if self.current_question.is_some() {
                     self.questions[self.current_question.unwrap()].text.clone()
@@ -74,7 +74,7 @@ impl SharedLiveState for WeddingData {
                     "Gleich geht es weiter!".to_string()
                 },
                 answer: player_data.answer,
-            }
+            })
         } else {
             WeddingView::SignUp
         }

@@ -8,8 +8,10 @@ import LiveData
 import Page.Loading
 import Page.Pomp
 import Page.Setup
+import Page.Wedding
 import PompData
 import Websocket
+import WeddingData
 
 
 {-| For now we don't have flags, but eventually that is going to pass in the
@@ -70,6 +72,9 @@ view model =
         Just (SetupLiveStateWrapper liveState) ->
             Page.Setup.view liveState |> Html.map (LiveData.SetupRemoteEventWrapper >> RemoteEventBox)
 
+        Just (WeddingLiveStateWrapper liveState) ->
+            Page.Wedding.view liveState |> Html.map (LiveData.WeddingRemoteEventWrapper >> RemoteEventBox)
+
 
 sandboxLiveStateParser : Json.Decode.Value -> Msg
 sandboxLiveStateParser value =
@@ -86,6 +91,7 @@ sandboxLiveStateParser value =
 type LiveState
     = PompLiveStateWrapper PompData.PompPlayerView
     | SetupLiveStateWrapper LiveData.SetupLiveState
+    | WeddingLiveStateWrapper WeddingData.WeddingView
 
 
 {-| Overall parser that looks at the "route" element first to decide which type
@@ -96,4 +102,5 @@ decodeLiveState =
     Json.Decode.oneOf
         [ LiveData.decodeLiveStateOneRouteOnly "pomp" PompData.decodePompPlayerView PompLiveStateWrapper
         , LiveData.decodeLiveStateOneRouteOnly "setup" LiveData.decodeSetupLiveState SetupLiveStateWrapper
+        , LiveData.decodeLiveStateOneRouteOnly "wedding" WeddingData.decodeWeddingView WeddingLiveStateWrapper
         ]

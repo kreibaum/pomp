@@ -23,20 +23,29 @@ impl ElmExport for Question {}
 #[derive(Serialize)]
 pub enum WeddingView {
     SignUp,
-    Guest {
-        name: String,
-        question: String,
-        answer: Option<Espoused>,
-    },
-    Host {
-        questions: Vec<Question>,
-        current_question: Option<usize>,
-    },
+    Guest(GuestView),
+    Host(HostView),
+}
+
+#[derive(Serialize)]
+pub struct GuestView {
+    pub name: String,
+    pub question: String,
+    pub answer: Option<Espoused>,
+}
+
+#[derive(Serialize)]
+pub struct HostView {
+    pub questions: Vec<Question>,
+    pub current_question: Option<usize>,
 }
 
 impl ElmExport for WeddingView {}
+impl ElmExport for GuestView {}
+impl ElmExport for HostView {}
 
 #[derive(Deserialize)]
+#[allow(clippy::enum_variant_names)] // Important to have good names also in Elm code.
 pub enum WeddingEvent {
     SetName(String),    // Also used to determine who is projector and host.
     SetGuess(Espoused), // Guests can only "guess", the host can "answer".

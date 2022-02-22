@@ -1,10 +1,9 @@
 module Page.Wedding exposing (view)
 
-import Html exposing (Html, br, button, div, input, node, text)
-import Html.Attributes exposing (placeholder)
+import Html exposing (Html, br, button, div, node, p, text)
+import Html.Attributes exposing (class)
 import Html.Events exposing (on, onClick)
 import Json.Decode
-import Json.Encode
 import WeddingData exposing (..)
 
 
@@ -28,8 +27,9 @@ view model =
 
 signUpView : Html WeddingEvent
 signUpView =
-    div []
-        [ text "Hochzeit von Birte & Jeremias"
+    div [ class "p-5 text-center" ]
+        [ p [ class "text-6xl py-5" ] [ text "Hochzeit", br [] [], text "Birte & Jeremias" ]
+        , p [ class "text-3xl" ] [ text "Mach mit beim Hochzeitsspiel!" ]
         , br [] []
         , node "name-input" [ on "name-input" decodeNameFromCustomEvent ] []
         ]
@@ -48,15 +48,15 @@ decodeNameFromCustomEvent =
 
 guestView : GuestView -> Html WeddingEvent
 guestView data =
-    div []
-        [ text ("Hallo, " ++ data.name ++ "!")
+    div [ class "p-5 text-center" ]
+        [ p [ class "text-3xl" ] [ text ("Hallo, " ++ data.name ++ "!") ]
         , br [] []
         , br [] []
-        , text data.question
+        , p [ class "text-4xl" ] [ text data.question ]
         , br [] []
-        , button [ onClick (SetGuess Bride) ] [ text "Birte" ]
+        , button [ onClick (SetGuess Bride), class "text-4xl" ] [ text "Birte" ]
         , text " - "
-        , button [ onClick (SetGuess Groom) ] [ text "Jeremias" ]
+        , button [ onClick (SetGuess Groom), class "text-4xl" ] [ text "Jeremias" ]
         , br [] []
         , case data.answer of
             Just Bride ->
@@ -77,7 +77,7 @@ guestView data =
 
 hostView : HostView -> Html WeddingEvent
 hostView data =
-    div []
+    div [ class "text-lg font-medium" ]
         [ text "Hochzeit von Birte & Jeremias - Moderator"
         , br [] []
         , br [] []

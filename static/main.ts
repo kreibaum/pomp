@@ -13,8 +13,14 @@ class NameInput extends HTMLElement {
 
         let shadowRoot = this.attachShadow({ mode: 'open' });
         shadowRoot.innerHTML = `
-            <input placeholder="Dein Name" /><br />
-            <button>Mitspielen</button>`;
+            <input style="font-size: 1.875rem;line-height: 2.25rem;padding-top: 1.25rem;padding-bottom: 1.25rem;" placeholder="Dein Name">
+            <br/>
+            <button style="--tw-text-opacity: 1; color: rgb(219 234 254 / var(--tw-text-opacity));
+                font-size: 1.875rem; line-height: 2.25rem; padding-top: 0.5rem; padding-bottom: 0.5rem;
+                padding-left: 1.5rem; padding-right: 1.5rem; --tw-bg-opacity: 1;
+                background-color: rgb(96 165 250 / var(--tw-bg-opacity)); border-radius: 0.25rem;">
+                Mitspielen
+            </button>`;
         shadowRoot.querySelector(`button`).addEventListener('click', (_event) => this.handleClick());
     }
 
@@ -54,7 +60,7 @@ function getUuid(): string {
 }
 
 function connect_websocket() {
-    var ws = new WebSocket(`ws://127.0.0.1:8080/ws?uuid=${getUuid()}`);
+    var ws = new WebSocket(`ws://0.0.0.0:8080/ws?uuid=${getUuid()}`);
     ws.onmessage = function (message) {
         app.ports.websocketIn.send(JSON.parse(message.data));
     };

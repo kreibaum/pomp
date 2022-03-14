@@ -12,7 +12,7 @@ use crate::game::{LiveEffect, RemoteEvent, SharedLiveState, UserUuid, UserView};
 const BIG_CONSTANT: usize = 99999999;
 
 pub struct WeddingData {
-    players: HashMap<UserUuid, PlayerData>,
+    players: HashMap<UserUuid, PlayerName>,
     hosts: HashSet<UserUuid>,
     questions: Vec<Question>,
     current_question: Option<usize>,
@@ -45,9 +45,7 @@ impl Question {
 }
 
 /// Stores name, score and other data for a player.
-struct PlayerData {
-    name: String,
-}
+struct PlayerName(String);
 
 impl UserView for WeddingView {}
 
@@ -68,7 +66,7 @@ impl SharedLiveState for WeddingData {
                 questions: HostQuestion::transform(&self.questions, &self.guesses),
                 current_question: self.current_question,
             })
-        } else if let Some(player_data) = player_data {
+        } else if let Some(player_name) = player_data {
             // Find current guess of the player in map.
             let key = (
                 player.clone(),
@@ -77,7 +75,7 @@ impl SharedLiveState for WeddingData {
             let guess = self.guesses.get(&key).cloned();
 
             WeddingView::Guest(GuestView {
-                name: player_data.name.clone(),
+                name: player_name.0.clone(),
                 question: if self.current_question.is_some() {
                     self.questions[self.current_question.unwrap()].text.clone()
                 } else {
@@ -104,9 +102,9 @@ impl SharedLiveState for WeddingData {
                 } else {
                     self.hosts.remove(&sender); // Making sure we are not a host anymore.
                     if let Some(p) = self.players.get_mut(&sender) {
-                        p.name = new_name;
+                        p.0 = new_name;
                     } else {
-                        self.players.insert(sender, PlayerData { name: new_name });
+                        self.players.insert(sender, PlayerName(new_name));
                     }
                 }
             }

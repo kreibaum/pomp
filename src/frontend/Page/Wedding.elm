@@ -1,5 +1,10 @@
 module Page.Wedding exposing (view)
 
+import Element exposing (Element, centerX, centerY, column, el, fill, height, padding, px, rgb, row, spacing, width)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html, br, button, div, node, p, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (on, onClick)
@@ -14,7 +19,7 @@ view model =
             signUpView
 
         Guest data ->
-            guestView data
+            Element.layout [] (guestView data)
 
         Host data ->
             hostView data
@@ -44,30 +49,51 @@ decodeNameFromCustomEvent =
 
 -- Guest -----------------------------------------------------------------------
 --------------------------------------------------------------------------------
+-- TODO: Namep [ class "text-3xl" ] [ text ("Hallo, " ++ data.name ++ "!") ]
+-- TODO: Mark selection
 
 
-guestView : GuestView -> Html WeddingEvent
+fontL : Element.Attr () a
+fontL =
+    Font.size 50
+
+
+fontM : Element.Attr () a
+fontM =
+    Font.size 40
+
+
+gap : Int
+gap =
+    20
+
+
+guestView : GuestView -> Element WeddingEvent
 guestView data =
-    div [ class "p-5 text-center" ]
-        [ p [ class "text-3xl" ] [ text ("Hallo, " ++ data.name ++ "!") ]
-        , br [] []
-        , br [] []
-        , p [ class "text-4xl" ] [ text data.question ]
-        , br [] []
-        , button [ onClick (SetGuess Bride), class "text-4xl" ] [ text "Birte" ]
-        , text " - "
-        , button [ onClick (SetGuess Groom), class "text-4xl" ] [ text "Jeremias" ]
-        , br [] []
-        , case data.guess of
-            Just Bride ->
-                text "Birte"
-
-            Just Groom ->
-                text "Jeremias"
-
-            Nothing ->
-                text "?"
+    column [ padding gap, spacing gap, width fill ]
+        [ el [ centerX, fontL ] (Element.text data.question)
+        , row [ spacing gap, width fill, height (px 200) ]
+            [ Input.button [ width fill, height fill, Border.width 5, guessButtonBg data.guess Bride ]
+                { onPress = Just (SetGuess Bride)
+                , label = el [ centerX, centerY, fontL ] (Element.text "Birte")
+                }
+            , Input.button [ width fill, height fill, Border.width 5, guessButtonBg data.guess Groom ]
+                { onPress = Just (SetGuess Groom)
+                , label = el [ centerX, centerY, fontL ] (Element.text "Jeremias")
+                }
+            ]
+        , el [ fontM ] (Element.text ("Du spielst als " ++ data.name ++ "."))
+        , el [ fontM ] (Element.text ("Du hast " ++ String.fromInt 0 ++ " Punkte."))
         ]
+
+
+guessButtonBg : Maybe Espoused -> Espoused -> Element.Attr () a
+guessButtonBg enteredGuess buttonMeaning =
+    if enteredGuess == Just buttonMeaning then
+        Background.color (rgb 0.6 0.6 0.9)
+
+    else
+        Background.color (rgb 1.0 1.0 1.0)
 
 
 

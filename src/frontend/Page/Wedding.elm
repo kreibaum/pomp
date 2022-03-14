@@ -105,10 +105,12 @@ questionView data =
         )
 
 
-oneQuestionView : Question -> Bool -> Int -> Html WeddingEvent
+oneQuestionView : HostQuestion -> Bool -> Int -> Html WeddingEvent
 oneQuestionView question isActive i =
     div []
-        [ text question.text
+        [ text question.question.text
         , text " - "
+        , text (" Bi = " ++ String.fromInt question.brideGuesses)
+        , text (", Je = " ++ String.fromInt question.groomGuesses ++ " - ")
         , button [ onClick (SetQuestion (Just i)) ] [ text "[Zeigen]" ]
         ]

@@ -65,7 +65,7 @@ impl SharedLiveState for WeddingData {
         let player_data = self.players.get(player);
         if self.hosts.contains(player) {
             WeddingView::Host(HostView {
-                questions: self.questions.clone(),
+                questions: HostQuestion::transform(&self.questions, &self.guesses),
                 current_question: self.current_question,
             })
         } else if let Some(player_data) = player_data {

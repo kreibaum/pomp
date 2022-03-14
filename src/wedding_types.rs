@@ -1,6 +1,8 @@
 //! Helper module to work around a restriction in rust_elm_typegen.
 //! Right now, there can't be any non-exportable types in the module.
 
+use std::collections::HashMap;
+
 use rust_elm_typegen::ElmExport;
 use serde::{Deserialize, Serialize};
 
@@ -56,8 +58,43 @@ pub struct GuestView {
 }
 
 #[derive(Serialize)]
+pub struct HostQuestion {
+    pub question: Question,
+    pub bride_guesses: usize,
+    pub groom_guesses: usize,
+}
+
+impl ElmExport for HostQuestion {}
+
+impl HostQuestion {
+    pub fn transform(
+        questions: &[Question],
+        guesses: &HashMap<(crate::game::UserUuid, usize), Espoused>,
+    ) -> Vec<HostQuestion> {
+        // First wrap everything with zero votes
+        let mut result = questions
+            .iter()
+            .map(|question| HostQuestion {
+                question: question.clone(),
+                bride_guesses: 0,
+                groom_guesses: 0,
+            })
+            .collect::<Vec<_>>();
+        // Next, add the votes
+        for ((_, question_index), guess) in guesses {
+            let question = &mut result[*question_index];
+            match guess {
+                Espoused::Bride => question.bride_guesses += 1,
+                Espoused::Groom => question.groom_guesses += 1,
+            }
+        }
+        result
+    }
+}
+
+#[derive(Serialize)]
 pub struct HostView {
-    pub questions: Vec<Question>,
+    pub questions: Vec<HostQuestion>,
     pub current_question: Option<usize>,
 }
 

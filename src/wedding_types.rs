@@ -15,10 +15,30 @@ impl ElmExport for Espoused {}
 #[derive(Serialize, Clone)]
 pub struct Question {
     pub text: String,
-    pub answer: Option<Espoused>,
+    pub state: QuestionState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub enum QuestionState {
+    NotAsked,
+    GuestsCanVote,
+    VotingClosed,
+    Answered(Espoused),
+}
+
+impl QuestionState {
+    pub fn can_guess(self) -> bool {
+        match self {
+            QuestionState::NotAsked => true,
+            QuestionState::GuestsCanVote => true,
+            QuestionState::VotingClosed => false,
+            QuestionState::Answered(_) => false,
+        }
+    }
 }
 
 impl ElmExport for Question {}
+impl ElmExport for QuestionState {}
 
 #[derive(Serialize)]
 pub enum WeddingView {
@@ -31,7 +51,8 @@ pub enum WeddingView {
 pub struct GuestView {
     pub name: String,
     pub question: String,
-    pub answer: Option<Espoused>,
+    pub guess: Option<Espoused>,
+    pub state: QuestionState,
 }
 
 #[derive(Serialize)]
@@ -50,6 +71,7 @@ pub enum WeddingEvent {
     SetName(String),    // Also used to determine who is projector and host.
     SetGuess(Espoused), // Guests can only "guess", the host can "answer".
     SetQuestion(Option<usize>),
+    SetQuestionState(usize, QuestionState),
 }
 
 impl ElmExport for WeddingEvent {}

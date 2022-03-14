@@ -58,7 +58,7 @@ guestView data =
         , text " - "
         , button [ onClick (SetGuess Groom), class "text-4xl" ] [ text "Jeremias" ]
         , br [] []
-        , case data.answer of
+        , case data.guess of
             Just Bride ->
                 text "Birte"
 

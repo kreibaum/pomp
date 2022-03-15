@@ -10,6 +10,8 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (on, onClick)
 import Json.Decode
 import List.Extra as List
+import Svg exposing (Svg)
+import Svg.Attributes as SvgA
 import WeddingData exposing (..)
 
 
@@ -210,17 +212,102 @@ votesString question =
 --------------------------------------------------------------------------------
 
 
-projectorView : ProjectorView -> Element WeddingEvent
+projectorView : ProjectorView -> Element a
 projectorView data =
     column [ width fill, padding 10, spacing 5 ]
-        [ el [ centerX, Font.size 50 ] (Element.text "Hochzeit von Birte & Jeremias")
-        , Element.text "Hier kommt die Frage hin"
-        , row [ width fill ]
-            [ el [ width fill ] (Element.text "Graph")
-            , el [ width fill ] (Element.text "Question Scores")
-            , el [ width fill ] (Element.text "Total Scores")
-            ]
+        [ el [ centerX, Font.size 50, Font.color (Element.rgb 0.4 0.4 0.4) ] (Element.text "Hochzeit von Birte & Jeremias")
+        , case data.question of
+            Just hostQuestion ->
+                questionView hostQuestion
+
+            Nothing ->
+                Element.text "Gleich geht es los!"
         , Element.text ("Es spielen " ++ String.fromInt (List.length data.connectedUsers) ++ " Gäste:")
         , paragraph [ width fill ]
             (List.map (\name -> Element.text (name ++ ", ")) data.connectedUsers)
         ]
+
+
+questionView : HostQuestion -> Element a
+questionView hostQuestion =
+    column [ width fill, spacing 5 ]
+        [ el [ centerX, Font.size 40 ] (Element.text hostQuestion.question.text)
+        , row [ width fill ]
+            [ el [ width fill ] (Element.html (graph hostQuestion))
+            , el [ width fill ] (Element.text "Question Scores")
+            , el [ width fill ] (Element.text "Total Scores")
+            ]
+        ]
+
+
+graph : HostQuestion -> Html a
+graph hostQuestion =
+    let
+        maxGuesses =
+            max hostQuestion.brideGuesses hostQuestion.groomGuesses
+
+        hBride =
+            if maxGuesses == 0 then
+                0
+
+            else
+                (toFloat hostQuestion.brideGuesses / toFloat maxGuesses) * 50
+
+        hGroom =
+            if maxGuesses == 0 then
+                0
+
+            else
+                (toFloat hostQuestion.groomGuesses / toFloat maxGuesses) * 50
+
+        colorBride =
+            if hostQuestion.question.state == Answered Bride then
+                "#ff0000"
+
+            else
+                "#aa7777"
+
+        colorGroom =
+            if hostQuestion.question.state == Answered Groom then
+                "#0000ff"
+
+            else
+                "#7777aa"
+    in
+    Svg.svg [ SvgA.width "70mm", SvgA.height "70mm", SvgA.viewBox "0 0 70 70" ]
+        [ Svg.g []
+            [ Svg.text_ [ svgTextStyle, SvgA.x "13.149777", SvgA.y "66.716469" ]
+                [ Svg.text "Birte" ]
+            , Svg.text_ [ svgTextStyle, SvgA.x "38.147503", SvgA.y "66.716469" ]
+                [ Svg.text "Jeremias" ]
+            , Svg.text_ [ svgTextStyle, SvgA.x "19.951769", SvgA.y "7.4098768" ]
+                [ Svg.tspan [ SvgA.style "text-align:center;text-anchor:middle" ] [ Svg.text (String.fromInt hostQuestion.brideGuesses) ] ]
+            , Svg.text_ [ svgTextStyle, SvgA.x "49.951767", SvgA.y "7.4642406" ]
+                [ Svg.tspan [ SvgA.style "text-align:center;text-anchor:middle" ] [ Svg.text (String.fromInt hostQuestion.groomGuesses) ] ]
+            , Svg.rect
+                [ SvgA.style ("fill:" ++ colorBride ++ ";stroke-width:8.94427;stroke-linecap:round;stroke-linejoin:round")
+                , SvgA.width "20"
+                , SvgA.height (String.fromFloat hBride)
+                , SvgA.x "10"
+                , SvgA.y (String.fromFloat (60 - hBride))
+                , SvgA.rx "3"
+                , SvgA.ry "3"
+                ]
+                []
+            , Svg.rect
+                [ SvgA.style ("fill:" ++ colorGroom ++ ";stroke-width:8.94427;stroke-linecap:round;stroke-linejoin:round")
+                , SvgA.width "20"
+                , SvgA.height (String.fromFloat hGroom)
+                , SvgA.x "40"
+                , SvgA.y (String.fromFloat (60 - hGroom))
+                , SvgA.rx "3"
+                , SvgA.ry "3"
+                ]
+                []
+            ]
+        ]
+
+
+svgTextStyle : Svg.Attribute a
+svgTextStyle =
+    SvgA.style "font-size:5.64444px;line-height:1.25;font-family:sans-serif;stroke-width:0.264583"

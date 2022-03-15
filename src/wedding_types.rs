@@ -45,6 +45,7 @@ pub enum WeddingView {
     SignUp,
     Guest(GuestView),
     Host(HostView),
+    Projector(ProjectorView),
 }
 
 #[derive(Serialize)]
@@ -65,6 +66,28 @@ pub struct HostQuestion {
 impl ElmExport for HostQuestion {}
 
 impl HostQuestion {
+    pub fn get(
+        questions: &[Question],
+        guesses: &HashMap<(crate::game::UserUuid, usize), Espoused>,
+        current_question: usize,
+    ) -> HostQuestion {
+        let mut result = HostQuestion {
+            question: questions[current_question].clone(),
+            bride_guesses: 0,
+            groom_guesses: 0,
+        };
+        // Get all guesses for the current question and sum up the bride and groom guesses.
+        for ((_, question_index), guess) in guesses {
+            if *question_index == current_question {
+                match guess {
+                    Espoused::Bride => result.bride_guesses += 1,
+                    Espoused::Groom => result.groom_guesses += 1,
+                }
+            }
+        }
+        result
+    }
+
     pub fn transform(
         questions: &[Question],
         guesses: &HashMap<(crate::game::UserUuid, usize), Espoused>,
@@ -110,3 +133,11 @@ pub enum WeddingEvent {
 }
 
 impl ElmExport for WeddingEvent {}
+
+#[derive(Serialize)]
+pub struct ProjectorView {
+    pub question: Option<HostQuestion>,
+    pub connected_users: Vec<String>,
+}
+
+impl ElmExport for ProjectorView {}

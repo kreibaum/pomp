@@ -14,6 +14,7 @@ const BIG_CONSTANT: usize = 99999999;
 pub struct WeddingData {
     players: HashMap<UserUuid, PlayerName>,
     hosts: HashSet<UserUuid>,
+    projectors: HashSet<UserUuid>,
     questions: Vec<Question>,
     current_question: Option<usize>,
     guesses: HashMap<(UserUuid, usize), Espoused>, // Map of all guesses.
@@ -24,6 +25,7 @@ impl Default for WeddingData {
         WeddingData {
             players: HashMap::new(),
             hosts: HashSet::new(),
+            projectors: HashSet::new(),
             questions: vec![
                 Question::new("Wer kann höher springen?"),
                 Question::new("Wer kann schneller ein Zelt aufbauen?"),
@@ -66,6 +68,18 @@ impl SharedLiveState for WeddingData {
                 questions: HostQuestion::transform(&self.questions, &self.guesses),
                 current_question: self.current_question,
             })
+        } else if self.projectors.contains(player) {
+            let question = self
+                .current_question
+                .map(|id| HostQuestion::get(&self.questions, &self.guesses, id));
+            WeddingView::Projector(ProjectorView {
+                question,
+                connected_users: self
+                    .players
+                    .iter()
+                    .map(|(_, name)| name.0.clone())
+                    .collect(),
+            })
         } else if let Some(player_name) = player_data {
             // Find current guess of the player in map.
             let key = (
@@ -96,16 +110,18 @@ impl SharedLiveState for WeddingData {
     fn process_remote_event(&mut self, event: Self::Event, sender: UserUuid) -> LiveEffect {
         match event {
             WeddingEvent::SetName(new_name) => {
+                self.hosts.remove(&sender); // Making sure we are not a host anymore.
+                self.projectors.remove(&sender); // Making sure we are not a projector anymore.
+
                 // SetName also decides what kind of participant you are.
                 if new_name == "host" {
                     self.hosts.insert(sender);
+                } else if new_name == "projector" {
+                    self.projectors.insert(sender);
+                } else if let Some(p) = self.players.get_mut(&sender) {
+                    p.0 = new_name;
                 } else {
-                    self.hosts.remove(&sender); // Making sure we are not a host anymore.
-                    if let Some(p) = self.players.get_mut(&sender) {
-                        p.0 = new_name;
-                    } else {
-                        self.players.insert(sender, PlayerName(new_name));
-                    }
+                    self.players.insert(sender, PlayerName(new_name));
                 }
             }
             WeddingEvent::SetGuess(espoused) => {

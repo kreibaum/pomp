@@ -1,6 +1,6 @@
 module Page.Wedding exposing (view)
 
-import Element exposing (Element, centerX, centerY, column, el, fill, height, padding, px, rgb, row, spacing, width)
+import Element exposing (Element, centerX, centerY, column, el, fill, height, padding, paragraph, px, rgb, row, spacing, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
@@ -24,6 +24,9 @@ view model =
 
         Host data ->
             Element.layout [] (hostView data)
+
+        Projector data ->
+            Element.layout [] (projectorView data)
 
 
 
@@ -200,3 +203,24 @@ oneQuestionView question isActive i =
 votesString : HostQuestion -> String
 votesString question =
     "Bi = " ++ String.fromInt question.brideGuesses ++ ", Je = " ++ String.fromInt question.groomGuesses
+
+
+
+-- Projector -------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+
+projectorView : ProjectorView -> Element WeddingEvent
+projectorView data =
+    column [ width fill, padding 10, spacing 5 ]
+        [ el [ centerX, Font.size 50 ] (Element.text "Hochzeit von Birte & Jeremias")
+        , Element.text "Hier kommt die Frage hin"
+        , row [ width fill ]
+            [ el [ width fill ] (Element.text "Graph")
+            , el [ width fill ] (Element.text "Question Scores")
+            , el [ width fill ] (Element.text "Total Scores")
+            ]
+        , Element.text ("Es spielen " ++ String.fromInt (List.length data.connectedUsers) ++ " Gäste:")
+        , paragraph [ width fill ]
+            (List.map (\name -> Element.text (name ++ ", ")) data.connectedUsers)
+        ]

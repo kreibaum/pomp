@@ -39,7 +39,7 @@ impl Question {
     fn new(text: &'static str) -> Self {
         Question {
             text: text.to_owned(),
-            state: QuestionState::NotAsked,
+            state: QuestionState::GuestsCanVote,
         }
     }
 }
@@ -85,7 +85,7 @@ impl SharedLiveState for WeddingData {
                 state: if self.current_question.is_some() {
                     self.questions[self.current_question.unwrap()].state
                 } else {
-                    QuestionState::NotAsked
+                    QuestionState::GuestsCanVote
                 },
             })
         } else {

@@ -9,6 +9,7 @@ import Html exposing (Html, br, button, div, node, p, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (on, onClick)
 import Json.Decode
+import List.Extra as List
 import WeddingData exposing (..)
 
 
@@ -22,7 +23,7 @@ view model =
             Element.layout [] (guestView data)
 
         Host data ->
-            hostView data
+            Element.layout [] (hostView data)
 
 
 
@@ -101,28 +102,79 @@ guessButtonBg enteredGuess buttonMeaning =
 --------------------------------------------------------------------------------
 
 
-hostView : HostView -> Html WeddingEvent
+hostView : HostView -> Element WeddingEvent
 hostView data =
-    div [ class "text-lg font-medium" ]
-        [ text "Hochzeit von Birte & Jeremias - Moderator"
-        , br [] []
-        , br [] []
+    column [ width fill, padding 5, spacing 5 ]
+        [ selectedQuestionView data
         , pauseView data
-        , questionView data
+        , questionListView data
         ]
 
 
-pauseView : HostView -> Html WeddingEvent
+selectedQuestionView : HostView -> Element WeddingEvent
+selectedQuestionView data =
+    case getCurrentQuestion data of
+        Nothing ->
+            el [] (Element.text "Keine Frage ausgewählt")
+
+        Just ( id, question ) ->
+            activeQuestionView id question
+
+
+activeQuestionView : Int -> HostQuestion -> Element WeddingEvent
+activeQuestionView id question =
+    column [ padding 10, spacing 5, width fill ]
+        [ Element.text question.question.text
+        , Element.text ("Votes: " ++ votesString question)
+        , row [ spacing 5, width fill ]
+            [ questionStateButton question.question.state "Abstimmung offen" id GuestsCanVote
+            , questionStateButton question.question.state "Abstimmung beendet" id VotingClosed
+            , questionStateButton question.question.state "Birte" id (Answered Bride)
+            , questionStateButton question.question.state "Jeremias" id (Answered Groom)
+            ]
+        ]
+
+
+questionStateButton : QuestionState -> String -> Int -> QuestionState -> Element WeddingEvent
+questionStateButton currentState caption id targetState =
+    if currentState == targetState then
+        Input.button [ width fill, padding 5, Border.width 1, Background.color (rgb 0.6 0.6 0.9) ]
+            { onPress = Nothing
+            , label = Element.text caption
+            }
+
+    else
+        Input.button [ width fill, padding 5, Border.width 1 ]
+            { onPress = Just (SetQuestionState id targetState)
+            , label = Element.text caption
+            }
+
+
+getCurrentQuestion : HostView -> Maybe ( Int, HostQuestion )
+getCurrentQuestion data =
+    case data.currentQuestion of
+        Nothing ->
+            Nothing
+
+        Just id ->
+            List.getAt id data.questions
+                |> Maybe.map (\question -> ( id, question ))
+
+
+pauseView : HostView -> Element WeddingEvent
 pauseView data =
-    div []
-        [ text "Pause - "
-        , button [ onClick (SetQuestion Nothing) ] [ text "Pausieren" ]
+    row [ width fill, spacing 5 ]
+        [ Element.text "Pause - "
+        , Input.button []
+            { onPress = Just (SetQuestion Nothing)
+            , label = Element.text "Pause"
+            }
         ]
 
 
-questionView : HostView -> Html WeddingEvent
-questionView data =
-    div []
+questionListView : HostView -> Element WeddingEvent
+questionListView data =
+    column [ spacing 5 ]
         (List.indexedMap
             (\i question ->
                 oneQuestionView question (Just i == data.currentQuestion) i
@@ -131,12 +183,20 @@ questionView data =
         )
 
 
-oneQuestionView : HostQuestion -> Bool -> Int -> Html WeddingEvent
+oneQuestionView : HostQuestion -> Bool -> Int -> Element WeddingEvent
 oneQuestionView question isActive i =
-    div []
-        [ text question.question.text
-        , text " - "
-        , text (" Bi = " ++ String.fromInt question.brideGuesses)
-        , text (", Je = " ++ String.fromInt question.groomGuesses ++ " - ")
-        , button [ onClick (SetQuestion (Just i)) ] [ text "[Zeigen]" ]
+    row []
+        [ Element.text question.question.text
+        , Element.text " - "
+        , Element.text (votesString question)
+        , Element.text " - "
+        , Input.button []
+            { onPress = Just (SetQuestion (Just i))
+            , label = Element.text "[Zeigen]"
+            }
         ]
+
+
+votesString : HostQuestion -> String
+votesString question =
+    "Bi = " ++ String.fromInt question.brideGuesses ++ ", Je = " ++ String.fromInt question.groomGuesses

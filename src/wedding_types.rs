@@ -22,7 +22,6 @@ pub struct Question {
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum QuestionState {
-    NotAsked,
     GuestsCanVote,
     VotingClosed,
     Answered(Espoused),
@@ -31,7 +30,6 @@ pub enum QuestionState {
 impl QuestionState {
     pub fn can_guess(self) -> bool {
         match self {
-            QuestionState::NotAsked => true,
             QuestionState::GuestsCanVote => true,
             QuestionState::VotingClosed => false,
             QuestionState::Answered(_) => false,

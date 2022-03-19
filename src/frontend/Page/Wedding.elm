@@ -12,6 +12,7 @@ import Json.Decode
 import List.Extra as List
 import Svg exposing (Svg)
 import Svg.Attributes as SvgA
+import Thunderstorm exposing (thunderstorm)
 import WeddingData exposing (..)
 
 
@@ -136,6 +137,7 @@ activeQuestionView id question =
             , questionStateButton question.question.state "Abstimmung beendet" id VotingClosed
             , questionStateButton question.question.state "Birte" id (Answered Bride)
             , questionStateButton question.question.state "Jeremias" id (Answered Groom)
+            , questionStateButton question.question.state "Konflikt" id ConflictAnswer
             ]
         ]
 
@@ -273,9 +275,16 @@ graph hostQuestion =
 
             else
                 "#7777aa"
+
+        thunderOverlay =
+            if hostQuestion.question.state == ConflictAnswer then
+                thunderstorm
+
+            else
+                []
     in
     Svg.svg [ SvgA.width "70mm", SvgA.height "70mm", SvgA.viewBox "0 0 70 70" ]
-        [ Svg.g []
+        ([ Svg.g []
             [ Svg.text_ [ svgTextStyle, SvgA.x "13.149777", SvgA.y "66.716469" ]
                 [ Svg.text "Birte" ]
             , Svg.text_ [ svgTextStyle, SvgA.x "38.147503", SvgA.y "66.716469" ]
@@ -305,7 +314,9 @@ graph hostQuestion =
                 ]
                 []
             ]
-        ]
+         ]
+            ++ thunderOverlay
+        )
 
 
 svgTextStyle : Svg.Attribute a

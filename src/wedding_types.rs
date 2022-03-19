@@ -25,6 +25,7 @@ pub enum QuestionState {
     GuestsCanVote,
     VotingClosed,
     Answered(Espoused),
+    ConflictAnswer, // When the Bride and the Groom don't agree on an option.
 }
 
 impl QuestionState {
@@ -33,6 +34,7 @@ impl QuestionState {
             QuestionState::GuestsCanVote => true,
             QuestionState::VotingClosed => false,
             QuestionState::Answered(_) => false,
+            QuestionState::ConflictAnswer => false,
         }
     }
 }

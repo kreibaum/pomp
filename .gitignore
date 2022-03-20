@@ -3,3 +3,6 @@
 /target
 /elm-stuff
 /generated
+
+# python helper scripts
+/.venv

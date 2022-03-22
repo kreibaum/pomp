@@ -1,12 +1,12 @@
 //! Helper module to work around a restriction in rust_elm_typegen.
 //! Right now, there can't be any non-exportable types in the module.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use rust_elm_typegen::ElmExport;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Espoused {
     Bride,
     Groom,
@@ -15,9 +15,11 @@ pub enum Espoused {
 impl ElmExport for Espoused {}
 
 #[derive(Serialize, Clone)]
-pub struct Question {
+pub struct QuestionView {
     pub text: String,
     pub state: QuestionState,
+    pub bride_guesses: usize,
+    pub groom_guesses: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -37,9 +39,17 @@ impl QuestionState {
             QuestionState::ConflictAnswer => false,
         }
     }
+
+    pub fn to_espoused(self) -> Option<Espoused> {
+        match self {
+            QuestionState::Answered(Espoused::Bride) => Some(Espoused::Bride),
+            QuestionState::Answered(Espoused::Groom) => Some(Espoused::Groom),
+            _ => None,
+        }
+    }
 }
 
-impl ElmExport for Question {}
+impl ElmExport for QuestionView {}
 impl ElmExport for QuestionState {}
 
 #[derive(Serialize)]
@@ -56,68 +66,12 @@ pub struct GuestView {
     pub question: String,
     pub guess: Option<Espoused>,
     pub state: QuestionState,
-}
-
-#[derive(Serialize)]
-pub struct HostQuestion {
-    pub question: Question,
-    pub bride_guesses: usize,
-    pub groom_guesses: usize,
-}
-
-impl ElmExport for HostQuestion {}
-
-impl HostQuestion {
-    pub fn get(
-        questions: &[Question],
-        guesses: &HashMap<(crate::game::UserUuid, usize), Espoused>,
-        current_question: usize,
-    ) -> HostQuestion {
-        let mut result = HostQuestion {
-            question: questions[current_question].clone(),
-            bride_guesses: 0,
-            groom_guesses: 0,
-        };
-        // Get all guesses for the current question and sum up the bride and groom guesses.
-        for ((_, question_index), guess) in guesses {
-            if *question_index == current_question {
-                match guess {
-                    Espoused::Bride => result.bride_guesses += 1,
-                    Espoused::Groom => result.groom_guesses += 1,
-                }
-            }
-        }
-        result
-    }
-
-    pub fn transform(
-        questions: &[Question],
-        guesses: &HashMap<(crate::game::UserUuid, usize), Espoused>,
-    ) -> Vec<HostQuestion> {
-        // First wrap everything with zero votes
-        let mut result = questions
-            .iter()
-            .map(|question| HostQuestion {
-                question: question.clone(),
-                bride_guesses: 0,
-                groom_guesses: 0,
-            })
-            .collect::<Vec<_>>();
-        // Next, add the votes
-        for ((_, question_index), guess) in guesses {
-            let question = &mut result[*question_index];
-            match guess {
-                Espoused::Bride => question.bride_guesses += 1,
-                Espoused::Groom => question.groom_guesses += 1,
-            }
-        }
-        result
-    }
+    pub score: usize,
 }
 
 #[derive(Serialize)]
 pub struct HostView {
-    pub questions: Vec<HostQuestion>,
+    pub questions: Vec<QuestionView>,
     pub current_question: Option<usize>,
 }
 
@@ -138,7 +92,7 @@ impl ElmExport for WeddingEvent {}
 
 #[derive(Serialize)]
 pub struct ProjectorView {
-    pub question: Option<HostQuestion>,
+    pub question: Option<QuestionView>,
     pub connected_users: Vec<String>,
 }
 

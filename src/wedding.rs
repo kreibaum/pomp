@@ -4,6 +4,7 @@
 //! library abstraction.
 
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use crate::wedding_types::*;
 
@@ -17,7 +18,7 @@ pub struct WeddingData {
     projectors: HashSet<UserUuid>,
     questions: Vec<Question>,
     current_question: Option<usize>,
-    guesses: HashMap<(UserUuid, usize), Espoused>, // Map of all guesses.
+    scores: HashMap<UserUuid, usize>, // Map of all scores.
 }
 
 impl Default for WeddingData {
@@ -32,20 +33,62 @@ impl Default for WeddingData {
                 Question::new("Wer singt lauter?"),
             ],
             current_question: None,
-            guesses: HashMap::new(),
+            scores: HashMap::new(),
         }
     }
+}
+
+struct Question {
+    pub text: String,
+    pub state: QuestionState,
+    guesses: HashMap<UserUuid, (Espoused, Instant)>,
+    bride_guesses: usize, // Cached
+    groom_guesses: usize, // Cached
 }
 
 impl Question {
-    fn new(text: &'static str) -> Self {
+    pub fn new(text: &'static str) -> Self {
         Question {
             text: text.to_owned(),
             state: QuestionState::GuestsCanVote,
+            guesses: HashMap::new(),
+            bride_guesses: 0,
+            groom_guesses: 0,
+        }
+    }
+
+    fn as_view(&self) -> QuestionView {
+        QuestionView {
+            text: self.text.clone(),
+            state: self.state,
+            bride_guesses: self.bride_guesses,
+            groom_guesses: self.groom_guesses,
+        }
+    }
+
+    fn set_guess(&mut self, user: UserUuid, guess: Espoused) {
+        // Check if the user already guessed. If they have not changed their
+        // guess, do nothing.
+        if let Some((old_guess, _)) = self.guesses.get(&user) {
+            if *old_guess == guess {
+                return;
+            }
+            // If the user changed their guess, remove their old guess from the count.
+            if *old_guess == Espoused::Bride {
+                self.bride_guesses -= 1;
+            } else {
+                self.groom_guesses -= 1;
+            }
+        }
+        // Add the new guess to the map and to the count.
+        self.guesses.insert(user, (guess, Instant::now()));
+        if guess == Espoused::Bride {
+            self.bride_guesses += 1;
+        } else {
+            self.groom_guesses += 1;
         }
     }
 }
-
 /// Stores name, score and other data for a player.
 struct PlayerName(String);
 
@@ -65,15 +108,17 @@ impl SharedLiveState for WeddingData {
         let player_data = self.players.get(player);
         if self.hosts.contains(player) {
             WeddingView::Host(HostView {
-                questions: HostQuestion::transform(&self.questions, &self.guesses),
+                questions: self.questions.iter().map(|q| q.as_view()).collect(),
                 current_question: self.current_question,
             })
         } else if self.projectors.contains(player) {
-            let question = self
-                .current_question
-                .map(|id| HostQuestion::get(&self.questions, &self.guesses, id));
+            // Get the current question.
+            let current_question_id = self.current_question.unwrap_or(BIG_CONSTANT);
+            let current_question = self.questions.get(current_question_id);
+            let current_question_view = current_question.map(|q| q.as_view());
+
             WeddingView::Projector(ProjectorView {
-                question,
+                question: current_question_view,
                 connected_users: self
                     .players
                     .iter()
@@ -81,27 +126,29 @@ impl SharedLiveState for WeddingData {
                     .collect(),
             })
         } else if let Some(player_name) = player_data {
-            // Find current guess of the player in map.
-            let key = (
-                player.clone(),
-                self.current_question.unwrap_or(BIG_CONSTANT),
-            );
-            let guess = self.guesses.get(&key).cloned();
-
-            WeddingView::Guest(GuestView {
-                name: player_name.0.clone(),
-                question: if self.current_question.is_some() {
-                    self.questions[self.current_question.unwrap()].text.clone()
-                } else {
-                    "Gleich geht es weiter!".to_string()
-                },
-                guess,
-                state: if self.current_question.is_some() {
-                    self.questions[self.current_question.unwrap()].state
-                } else {
-                    QuestionState::GuestsCanVote
-                },
-            })
+            // Get current question
+            let current_question_id = self.current_question.unwrap_or(BIG_CONSTANT);
+            let score = self.scores.get(player).cloned().unwrap_or(0);
+            if let Some(current_question) = self.questions.get(current_question_id) {
+                WeddingView::Guest(GuestView {
+                    name: player_name.0.clone(),
+                    question: current_question.text.clone(),
+                    guess: current_question
+                        .guesses
+                        .get(player)
+                        .map(|&(guess, _)| guess),
+                    state: current_question.state,
+                    score,
+                })
+            } else {
+                WeddingView::Guest(GuestView {
+                    name: player_name.0.clone(),
+                    question: "Gleich geht es weiter!".to_owned(),
+                    guess: None,
+                    state: QuestionState::GuestsCanVote,
+                    score,
+                })
+            }
         } else {
             WeddingView::SignUp
         }
@@ -124,17 +171,14 @@ impl SharedLiveState for WeddingData {
                     self.players.insert(sender, PlayerName(new_name));
                 }
             }
-            WeddingEvent::SetGuess(espoused) => {
+            WeddingEvent::SetGuess(new_guess) => {
                 // Get current question to check if it is still open
                 if let Some(question) = self.current_question {
-                    if !self.questions[question].state.can_guess() {
+                    let question = &mut self.questions[question];
+                    if !question.state.can_guess() {
                         return LiveEffect::None;
                     }
-                    let key = (
-                        sender.clone(),
-                        self.current_question.unwrap_or(BIG_CONSTANT),
-                    );
-                    self.guesses.insert(key, espoused);
+                    question.set_guess(sender, new_guess);
                 }
             }
             WeddingEvent::SetQuestion(id) => {
@@ -143,6 +187,7 @@ impl SharedLiveState for WeddingData {
             WeddingEvent::SetQuestionState(id, question_state) => {
                 if let Some(question) = self.questions.get_mut(id) {
                     question.state = question_state;
+                    self.scores = score_guesses(&self.questions);
                 }
             }
         }
@@ -157,4 +202,28 @@ impl SharedLiveState for WeddingData {
     fn route_id() -> &'static str {
         "wedding"
     }
+}
+
+/// Each question is worth 100 points to the first question that got the right
+/// answer. The second person gets 99 points, then 98, etc.
+/// If you guess incorrectly, you get 0 points.
+fn score_guesses(questions: &[Question]) -> HashMap<UserUuid, usize> {
+    let mut scores: HashMap<UserUuid, usize> = HashMap::new();
+    for question in questions {
+        if let Some(answer) = question.state.to_espoused() {
+            // Create a copy of the user guesses and sort by the time they guessed.
+            let mut guesses = question.guesses.iter().collect::<Vec<_>>();
+            guesses.sort_by_key(|&(_, (_, time))| time);
+            // Iterate over the guesses and give points everyone that got it right.
+            let mut points_left_to_give = 100;
+            for (user, (guess, _)) in guesses {
+                if answer == *guess {
+                    // Increase score of player or create new entry if they don't exist yet.
+                    *scores.entry(user.clone()).or_insert(0) += points_left_to_give;
+                    points_left_to_give -= 1;
+                }
+            }
+        }
+    }
+    scores
 }

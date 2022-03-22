@@ -90,7 +90,7 @@ guestView data =
                 }
             ]
         , el [ fontM ] (Element.text ("Du spielst als " ++ data.name ++ "."))
-        , el [ fontM ] (Element.text ("Du hast " ++ String.fromInt 0 ++ " Punkte."))
+        , el [ fontM ] (Element.text ("Du hast " ++ String.fromInt data.score ++ " Punkte."))
         ]
 
 
@@ -112,7 +112,7 @@ hostView : HostView -> Element WeddingEvent
 hostView data =
     column [ width fill, padding 5, spacing 5 ]
         [ selectedQuestionView data
-        , pauseView data
+        , pauseView
         , questionListView data
         ]
 
@@ -127,17 +127,17 @@ selectedQuestionView data =
             activeQuestionView id question
 
 
-activeQuestionView : Int -> HostQuestion -> Element WeddingEvent
+activeQuestionView : Int -> QuestionView -> Element WeddingEvent
 activeQuestionView id question =
     column [ padding 10, spacing 5, width fill ]
-        [ Element.text question.question.text
+        [ Element.text question.text
         , Element.text ("Votes: " ++ votesString question)
         , row [ spacing 5, width fill ]
-            [ questionStateButton question.question.state "Abstimmung offen" id GuestsCanVote
-            , questionStateButton question.question.state "Abstimmung beendet" id VotingClosed
-            , questionStateButton question.question.state "Birte" id (Answered Bride)
-            , questionStateButton question.question.state "Jeremias" id (Answered Groom)
-            , questionStateButton question.question.state "Konflikt" id ConflictAnswer
+            [ questionStateButton question.state "Abstimmung offen" id GuestsCanVote
+            , questionStateButton question.state "Abstimmung beendet" id VotingClosed
+            , questionStateButton question.state "Birte" id (Answered Bride)
+            , questionStateButton question.state "Jeremias" id (Answered Groom)
+            , questionStateButton question.state "Konflikt" id ConflictAnswer
             ]
         ]
 
@@ -157,7 +157,7 @@ questionStateButton currentState caption id targetState =
             }
 
 
-getCurrentQuestion : HostView -> Maybe ( Int, HostQuestion )
+getCurrentQuestion : HostView -> Maybe ( Int, QuestionView )
 getCurrentQuestion data =
     case data.currentQuestion of
         Nothing ->
@@ -168,8 +168,8 @@ getCurrentQuestion data =
                 |> Maybe.map (\question -> ( id, question ))
 
 
-pauseView : HostView -> Element WeddingEvent
-pauseView data =
+pauseView : Element WeddingEvent
+pauseView =
     row [ width fill, spacing 5 ]
         [ Element.text "Pause - "
         , Input.button []
@@ -190,10 +190,10 @@ questionListView data =
         )
 
 
-oneQuestionView : HostQuestion -> Bool -> Int -> Element WeddingEvent
+oneQuestionView : QuestionView -> Bool -> Int -> Element WeddingEvent
 oneQuestionView question isActive i =
     row []
-        [ Element.text question.question.text
+        [ Element.text question.text
         , Element.text " - "
         , Element.text (votesString question)
         , Element.text " - "
@@ -204,7 +204,7 @@ oneQuestionView question isActive i =
         ]
 
 
-votesString : HostQuestion -> String
+votesString : QuestionView -> String
 votesString question =
     "Bi = " ++ String.fromInt question.brideGuesses ++ ", Je = " ++ String.fromInt question.groomGuesses
 
@@ -230,10 +230,10 @@ projectorView data =
         ]
 
 
-questionView : HostQuestion -> Element a
+questionView : QuestionView -> Element a
 questionView hostQuestion =
     column [ width fill, spacing 5 ]
-        [ el [ centerX, Font.size 40 ] (Element.text hostQuestion.question.text)
+        [ el [ centerX, Font.size 40 ] (Element.text hostQuestion.text)
         , row [ width fill ]
             [ el [ width fill ] (Element.html (graph hostQuestion))
             , el [ width fill ] (Element.text "Question Scores")
@@ -242,7 +242,7 @@ questionView hostQuestion =
         ]
 
 
-graph : HostQuestion -> Html a
+graph : QuestionView -> Html a
 graph hostQuestion =
     let
         maxGuesses =
@@ -263,28 +263,28 @@ graph hostQuestion =
                 (toFloat hostQuestion.groomGuesses / toFloat maxGuesses) * 50
 
         colorBride =
-            if hostQuestion.question.state == Answered Bride then
+            if hostQuestion.state == Answered Bride then
                 "#ff0000"
 
             else
                 "#aa7777"
 
         colorGroom =
-            if hostQuestion.question.state == Answered Groom then
+            if hostQuestion.state == Answered Groom then
                 "#0000ff"
 
             else
                 "#7777aa"
 
         thunderOverlay =
-            if hostQuestion.question.state == ConflictAnswer then
+            if hostQuestion.state == ConflictAnswer then
                 thunderstorm
 
             else
                 []
     in
     Svg.svg [ SvgA.width "70mm", SvgA.height "70mm", SvgA.viewBox "0 0 70 70" ]
-        ([ Svg.g []
+        (Svg.g []
             [ Svg.text_ [ svgTextStyle, SvgA.x "13.149777", SvgA.y "66.716469" ]
                 [ Svg.text "Birte" ]
             , Svg.text_ [ svgTextStyle, SvgA.x "38.147503", SvgA.y "66.716469" ]
@@ -314,8 +314,7 @@ graph hostQuestion =
                 ]
                 []
             ]
-         ]
-            ++ thunderOverlay
+            :: thunderOverlay
         )
 
 

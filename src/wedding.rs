@@ -11,6 +11,7 @@ use crate::wedding_types::*;
 use crate::game::{LiveEffect, RemoteEvent, SharedLiveState, UserUuid, UserView};
 
 const BIG_CONSTANT: usize = 99999999;
+const HIGHSCORE_LIMIT: usize = 10;
 
 pub struct WeddingData {
     players: HashMap<UserUuid, PlayerName>,
@@ -19,6 +20,8 @@ pub struct WeddingData {
     questions: Vec<Question>,
     current_question: Option<usize>,
     scores: HashMap<UserUuid, usize>, // Map of all scores.
+    high_scores: Vec<HighScoreEntry>, // Top HIGHSCORE_LIMIT scores.
+    current_question_high_scores: Vec<HighScoreEntry>,
 }
 
 impl Default for WeddingData {
@@ -34,6 +37,8 @@ impl Default for WeddingData {
             ],
             current_question: None,
             scores: HashMap::new(),
+            high_scores: vec![],
+            current_question_high_scores: vec![],
         }
     }
 }
@@ -124,6 +129,8 @@ impl SharedLiveState for WeddingData {
                     .iter()
                     .map(|(_, name)| name.0.clone())
                     .collect(),
+                high_scores: self.high_scores.clone(),
+                current_question_high_scores: self.current_question_high_scores.clone(),
             })
         } else if let Some(player_name) = player_data {
             // Get current question
@@ -183,11 +190,22 @@ impl SharedLiveState for WeddingData {
             }
             WeddingEvent::SetQuestion(id) => {
                 self.current_question = id;
+                self.current_question_high_scores = current_question_high_scores(
+                    self.current_question,
+                    &self.players,
+                    &self.questions,
+                );
             }
             WeddingEvent::SetQuestionState(id, question_state) => {
                 if let Some(question) = self.questions.get_mut(id) {
                     question.state = question_state;
                     self.scores = score_guesses(&self.questions);
+                    self.high_scores = high_scores(&self.players, &self.scores);
+                    self.current_question_high_scores = current_question_high_scores(
+                        self.current_question,
+                        &self.players,
+                        &self.questions,
+                    );
                 }
             }
         }
@@ -220,10 +238,47 @@ fn score_guesses(questions: &[Question]) -> HashMap<UserUuid, usize> {
                 if answer == *guess {
                     // Increase score of player or create new entry if they don't exist yet.
                     *scores.entry(user.clone()).or_insert(0) += points_left_to_give;
-                    points_left_to_give -= 1;
+                    points_left_to_give = points_left_to_give.saturating_sub(1);
                 }
             }
         }
     }
     scores
+}
+
+fn high_scores(
+    player_names: &HashMap<UserUuid, PlayerName>,
+    scores: &HashMap<UserUuid, usize>,
+) -> Vec<HighScoreEntry> {
+    let mut high_scores: Vec<HighScoreEntry> = scores
+        .iter()
+        .filter(|&(_, &score)| score > 0)
+        .map(|(user, &score)| HighScoreEntry {
+            name: player_names
+                .get(user)
+                .map(|x| x.0.clone())
+                .unwrap_or_else(|| "".to_owned()),
+            score,
+        })
+        .collect::<Vec<_>>();
+    high_scores.sort_by_key(|x| x.score);
+    high_scores.reverse();
+    high_scores.truncate(HIGHSCORE_LIMIT);
+    high_scores
+}
+
+// Gives the high scores for the current question.
+// Returns an empty vector if no question is selected.
+fn current_question_high_scores(
+    current_question: Option<usize>,
+    player_names: &HashMap<UserUuid, PlayerName>,
+    questions: &[Question],
+) -> Vec<HighScoreEntry> {
+    let current_question_id = current_question.unwrap_or(BIG_CONSTANT);
+    if let Some(question) = questions.get(current_question_id) {
+        let scores = score_guesses(std::slice::from_ref(question));
+        high_scores(player_names, &scores)
+    } else {
+        vec![]
+    }
 }

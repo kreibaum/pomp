@@ -218,28 +218,58 @@ projectorView : ProjectorView -> Element a
 projectorView data =
     column [ width fill, padding 10, spacing 5 ]
         [ el [ centerX, Font.size 50, Font.color (Element.rgb 0.4 0.4 0.4) ] (Element.text "Hochzeit von Birte & Jeremias")
-        , case data.question of
-            Just hostQuestion ->
-                questionView hostQuestion
-
-            Nothing ->
-                Element.text "Gleich geht es los!"
+        , questionView data
         , Element.text ("Es spielen " ++ String.fromInt (List.length data.connectedUsers) ++ " Gäste:")
         , paragraph [ width fill ]
             (List.map (\name -> Element.text (name ++ ", ")) data.connectedUsers)
         ]
 
 
-questionView : QuestionView -> Element a
-questionView hostQuestion =
-    column [ width fill, spacing 5 ]
-        [ el [ centerX, Font.size 40 ] (Element.text hostQuestion.text)
+questionView : ProjectorView -> Element a
+questionView data =
+    column [ width fill, spacing 5, Element.paddingEach { top = 0, right = 0, bottom = 35, left = 0 } ]
+        [ el [ centerX, Font.size 40, Element.paddingEach { top = 0, right = 0, bottom = 15, left = 0 } ] (Element.text (questionText data))
         , row [ width fill ]
-            [ el [ width fill ] (Element.html (graph hostQuestion))
-            , el [ width fill ] (Element.text "Question Scores")
-            , el [ width fill ] (Element.text "Total Scores")
+            [ el [ width fill ] (scoreView "Bestenliste (Frage)" data.currentQuestionHighScores)
+            , el [ width fill ] (graphView data)
+            , el [ width fill ] (scoreView "Bestenliste (Gesamt)" data.highScores)
             ]
         ]
+
+
+questionText : ProjectorView -> String
+questionText data =
+    case data.question of
+        Just hostQuestion ->
+            hostQuestion.text
+
+        Nothing ->
+            "Gleich geht es los!"
+
+
+graphView : ProjectorView -> Element a
+graphView data =
+    case data.question of
+        Just hostQuestion ->
+            el [ centerX ] (Element.html (graph hostQuestion))
+
+        Nothing ->
+            Element.none
+
+
+scoreView : String -> List HighScoreEntry -> Element a
+scoreView caption scores =
+    column [ width fill, spacing 5 ]
+        (el [ centerX, Font.bold ] (Element.text caption)
+            :: List.map
+                (\entry ->
+                    row [ spacing 5, centerX ]
+                        [ el [ width fill ] (Element.text (String.fromInt entry.score))
+                        , el [ width fill ] (Element.text entry.name)
+                        ]
+                )
+                scores
+        )
 
 
 graph : QuestionView -> Html a

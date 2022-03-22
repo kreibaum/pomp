@@ -94,6 +94,15 @@ impl ElmExport for WeddingEvent {}
 pub struct ProjectorView {
     pub question: Option<QuestionView>,
     pub connected_users: Vec<String>,
+    pub high_scores: Vec<HighScoreEntry>,
+    pub current_question_high_scores: Vec<HighScoreEntry>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HighScoreEntry {
+    pub name: String,
+    pub score: usize,
 }
 
 impl ElmExport for ProjectorView {}
+impl ElmExport for HighScoreEntry {}

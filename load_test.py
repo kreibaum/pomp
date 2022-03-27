@@ -30,10 +30,22 @@ async def producer(websocket):
     name = random_name()
     await websocket.send(f"{{\"SetName\":\"{name}\"}}")
     while True:
-        # Either guess "Bride" or "Groom" with 50% chance
-        await websocket.send(f"{{\"SetGuess\":\"{random.choice(['Bride', 'Groom'])}\"}}")
+        await random_action(websocket)
         # Sleep a random amount of time between 1 and 3 seconds
         await asyncio.sleep(1 + (2 * random.random()))
+
+
+async def random_action(websocket):
+    # Randomly choose an action from "Guess" (99%) or "Change Name" (1%)
+    if random.random() < 0.01:
+        await websocket.send("\"RemoveName\"")
+        # Sleep a random amount of time between 3 and 5 seconds
+        await asyncio.sleep(3 + (2 * random.random()))
+        # Set another random name
+        await websocket.send(f"{{\"SetName\":\"{random_name()}\"}}")
+    else:
+        # Either guess "Bride" or "Groom" with 50% chance
+        await websocket.send(f"{{\"SetGuess\":\"{random.choice(['Bride', 'Groom'])}\"}}")
 
 
 async def consumer(websocket):

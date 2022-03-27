@@ -56,8 +56,6 @@ decodeNameFromCustomEvent =
 
 -- Guest -----------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- TODO: Namep [ class "text-3xl" ] [ text ("Hallo, " ++ data.name ++ "!") ]
--- TODO: Mark selection
 
 
 fontL : Element.Attr () a
@@ -91,6 +89,10 @@ guestView data =
             ]
         , el [ fontM ] (Element.text ("Du spielst als " ++ data.name ++ "."))
         , el [ fontM ] (Element.text ("Du hast " ++ String.fromInt data.score ++ " Punkte."))
+        , Input.button [ Border.width 5, Border.color (Element.rgb 0.2 0.2 0.2) ]
+            { onPress = Just RemoveName
+            , label = el [ fontM, padding 5, Font.color (Element.rgb 0.2 0.2 0.2) ] (Element.text "Meinen Namen ändern")
+            }
         ]
 
 

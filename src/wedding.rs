@@ -178,6 +178,11 @@ impl SharedLiveState for WeddingData {
                     self.players.insert(sender, PlayerName(new_name));
                 }
             }
+            WeddingEvent::RemoveName => {
+                self.players.remove(&sender);
+                self.hosts.remove(&sender);
+                self.projectors.remove(&sender);
+            }
             WeddingEvent::SetGuess(new_guess) => {
                 // Get current question to check if it is still open
                 if let Some(question) = self.current_question {

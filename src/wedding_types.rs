@@ -83,6 +83,7 @@ impl ElmExport for HostView {}
 #[allow(clippy::enum_variant_names)] // Important to have good names also in Elm code.
 pub enum WeddingEvent {
     SetName(String),    // Also used to determine who is projector and host.
+    RemoveName,         // Player goes back to sign up.
     SetGuess(Espoused), // Guests can only "guess", the host can "answer".
     SetQuestion(Option<usize>),
     SetQuestionState(usize, QuestionState),

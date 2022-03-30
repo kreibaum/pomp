@@ -56,8 +56,9 @@ update msg model =
             )
 
         BrokenLiveState errorMessage ->
-            Debug.log "Got a broken liveState from the server" errorMessage
-                |> (\_ -> ( model, Cmd.none ))
+            --Debug.log "Got a broken liveState from the server" errorMessage
+            --|> (\_ -> ( model, Cmd.none ))
+            ( model, Cmd.none )
 
 
 view : Model -> Html Msg

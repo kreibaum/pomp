@@ -12,6 +12,12 @@ This still needs improvement.
     elm-live src/frontend/Main.elm --start-page=static/index.html --hot -- --output=target/elm.js
     cargo watch -x 'run --bin pomp'
 
+## Building for deployment
+
+    cargo build --release
+    elm make --optimize --output=target/elm-optimize.js src/frontend/Main.elm
+    uglifyjs ./elm-optimize.js -o ./elm-optimize.min.js --mangle --compress
+
 # Game Rules
 
 If you are familiar with [Splendor](https://boardgamegeek.com/boardgame/148228/splendor)
